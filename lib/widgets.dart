@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'mock_data.dart';
@@ -279,15 +281,7 @@ class FeedPostCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Image.asset(
-                      post.imageAsset,
-                      width: double.infinity,
-                      height: compact ? 190 : 230,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+                  _PostImageMedia(post: post, compact: compact),
                   if (!compact) ...[
                     const SizedBox(height: 18),
                     Row(
@@ -343,6 +337,88 @@ class FeedPostCard extends StatelessWidget {
         border: Border.all(color: kLine),
       ),
       child: content,
+    );
+  }
+}
+
+class _PostImageMedia extends StatelessWidget {
+  const _PostImageMedia({required this.post, required this.compact});
+
+  final FeedPost post;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePaths = post.imagePaths;
+
+    if (imagePaths.isEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Image.asset(
+          post.imageAsset,
+          width: double.infinity,
+          height: compact ? 190 : 230,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
+    if (imagePaths.length == 1) {
+      return _LocalPostImage(
+        path: imagePaths.first,
+        height: compact ? 190 : 230,
+      );
+    }
+
+    return SizedBox(
+      height: compact ? 190 : 230,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        itemCount: imagePaths.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          return SizedBox(
+            width: compact ? 190 : 230,
+            child: _LocalPostImage(
+              path: imagePaths[index],
+              height: compact ? 190 : 230,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _LocalPostImage extends StatelessWidget {
+  const _LocalPostImage({required this.path, required this.height});
+
+  final String path;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Image.file(
+        File(path),
+        width: double.infinity,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            height: height,
+            color: const Color(0xFFF3F4F6),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.broken_image_outlined,
+              color: kMuted,
+              size: 34,
+            ),
+          );
+        },
+      ),
     );
   }
 }

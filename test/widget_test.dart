@@ -63,6 +63,7 @@ class _FakeFeedPostRepository extends FeedPostRepository {
     required String body,
     required String topic,
     required bool allowReplies,
+    List<String> imagePaths = const [],
   }) async {
     _posts.insert(
       0,
@@ -73,6 +74,7 @@ class _FakeFeedPostRepository extends FeedPostRepository {
         title: topic.isEmpty ? 'Update komunitas' : topic,
         body: body,
         imageAsset: cleanupAsset,
+        imagePaths: imagePaths,
         likes: 0,
         comments: 0,
       ),

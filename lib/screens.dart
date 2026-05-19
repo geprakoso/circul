@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -167,6 +168,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
   var _allowReplies = true;
   var _locationCheckInEnabled = false;
   var _isSubmitting = false;
+  final _selectedImagePaths = <String>[];
 
   bool get _canPost => !_isSubmitting && _controller.text.trim().isNotEmpty;
 
@@ -192,6 +194,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
         body: _controller.text,
         topic: _selectedTopic,
         allowReplies: _allowReplies,
+        imagePaths: List<String>.of(_selectedImagePaths),
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -206,7 +209,18 @@ class _NewPostScreenState extends State<NewPostScreen> {
 
   Future<void> _openImageAttachmentChooser() async {
     try {
-      await _attachmentsChannel.invokeMethod<void>('openImageChooser');
+      final imagePaths = await _attachmentsChannel.invokeListMethod<String>(
+        'openImageChooser',
+      );
+      if (!mounted || imagePaths == null || imagePaths.isEmpty) return;
+
+      setState(() {
+        for (final path in imagePaths) {
+          if (!_selectedImagePaths.contains(path)) {
+            _selectedImagePaths.add(path);
+          }
+        }
+      });
     } on PlatformException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -222,6 +236,10 @@ class _NewPostScreenState extends State<NewPostScreen> {
         ),
       );
     }
+  }
+
+  void _removeSelectedImage(String path) {
+    setState(() => _selectedImagePaths.remove(path));
   }
 
   @override
@@ -316,8 +334,10 @@ class _NewPostScreenState extends State<NewPostScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 16),
-                                _LocationPlaceholderBox(
-                                  enabled: _locationCheckInEnabled,
+                                _AttachmentMediaStrip(
+                                  locationEnabled: _locationCheckInEnabled,
+                                  imagePaths: _selectedImagePaths,
+                                  onRemoveImage: _removeSelectedImage,
                                 ),
                               ],
                             ),
@@ -657,10 +677,119 @@ class _ComposeToolButton extends StatelessWidget {
   }
 }
 
+class _AttachmentMediaStrip extends StatelessWidget {
+  const _AttachmentMediaStrip({
+    required this.locationEnabled,
+    required this.imagePaths,
+    required this.onRemoveImage,
+  });
+
+  final bool locationEnabled;
+  final List<String> imagePaths;
+  final ValueChanged<String> onRemoveImage;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const height = 170.0;
+        final cardWidth = imagePaths.isEmpty
+            ? constraints.maxWidth
+            : math.min(170.0, constraints.maxWidth * 0.72);
+
+        if (imagePaths.isEmpty) {
+          return _LocationPlaceholderBox(
+            enabled: locationEnabled,
+            width: cardWidth,
+          );
+        }
+
+        return SizedBox(
+          height: height,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            child: Row(
+              children: [
+                _LocationPlaceholderBox(
+                  enabled: locationEnabled,
+                  width: cardWidth,
+                ),
+                const SizedBox(width: 12),
+                for (final path in imagePaths) ...[
+                  _ImagePreviewCard(
+                    path: path,
+                    width: cardWidth,
+                    onRemove: () => onRemoveImage(path),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ImagePreviewCard extends StatelessWidget {
+  const _ImagePreviewCard({
+    required this.path,
+    required this.width,
+    required this.onRemove,
+  });
+
+  final String path;
+  final double width;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        width: width,
+        height: 170,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.file(File(path), fit: BoxFit.cover),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: GestureDetector(
+                onTap: onRemove,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.68),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.16),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 19,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _LocationPlaceholderBox extends StatelessWidget {
-  const _LocationPlaceholderBox({required this.enabled});
+  const _LocationPlaceholderBox({required this.enabled, required this.width});
 
   final bool enabled;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
@@ -670,7 +799,7 @@ class _LocationPlaceholderBox extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          width: double.infinity,
+          width: width,
           height: 170,
           decoration: BoxDecoration(
             color: const Color(0xFF151819),

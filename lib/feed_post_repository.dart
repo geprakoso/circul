@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:sqflite/sqflite.dart';
 
 import 'local_database.dart';
@@ -25,6 +27,7 @@ class FeedPostRepository {
     required String body,
     required String topic,
     required bool allowReplies,
+    List<String> imagePaths = const [],
   }) async {
     final db = await _database.database;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -38,7 +41,8 @@ class FeedPostRepository {
       'time_ago': 'Baru saja',
       'title': cleanTopic.isEmpty ? 'Update komunitas' : cleanTopic,
       'body': cleanBody,
-      'image_asset': cleanupAsset,
+      'image_asset': imagePaths.isEmpty ? cleanupAsset : '',
+      'image_paths': jsonEncode(imagePaths),
       'likes': 0,
       'comments': 0,
       'topic': cleanTopic.isEmpty ? null : cleanTopic,
@@ -71,6 +75,7 @@ class FeedPostRepository {
         'title': post.title,
         'body': post.body,
         'image_asset': post.imageAsset,
+        'image_paths': jsonEncode(post.imagePaths),
         'likes': post.likes,
         'comments': post.comments,
         'topic': null,
@@ -92,8 +97,21 @@ class FeedPostRepository {
       title: row['title'] as String,
       body: row['body'] as String,
       imageAsset: row['image_asset'] as String,
+      imagePaths: _imagePathsFromRow(row['image_paths']),
       likes: row['likes'] as int,
       comments: row['comments'] as int,
     );
+  }
+
+  List<String> _imagePathsFromRow(Object? value) {
+    if (value is! String || value.isEmpty) return const [];
+
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! List) return const [];
+      return decoded.whereType<String>().toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
   }
 }

@@ -21,6 +21,7 @@ class FeedPost {
     required this.imageAsset,
     required this.likes,
     required this.comments,
+    this.imagePaths = const [],
   });
 
   final String author;
@@ -29,6 +30,7 @@ class FeedPost {
   final String title;
   final String body;
   final String imageAsset;
+  final List<String> imagePaths;
   final int likes;
   final int comments;
 }
@@ -105,7 +107,11 @@ const topics = [
 
 const achievements = [
   Achievement(Icons.eco_rounded, 'Eco Starter', 'Mulai langkah pertama'),
-  Achievement(Icons.recycling_rounded, 'Zero Waste Warrior', 'Aktif mengurangi sampah'),
+  Achievement(
+    Icons.recycling_rounded,
+    'Zero Waste Warrior',
+    'Aktif mengurangi sampah',
+  ),
   Achievement(Icons.spa_rounded, 'Green Contributor', 'Berbagi dampak positif'),
   Achievement(Icons.groups_rounded, 'Community Builder', 'Membangun komunitas'),
 ];

@@ -34,16 +34,16 @@ class MainFlutterWindow: NSWindow {
     let panel = NSOpenPanel()
     panel.title = "Pilih gambar"
     panel.prompt = "Pilih"
-    panel.allowsMultipleSelection = false
+    panel.allowsMultipleSelection = true
     panel.canChooseDirectories = false
     panel.canChooseFiles = true
     panel.allowedFileTypes = ["public.image"]
 
     panel.beginSheetModal(for: self) { response in
       if response == .OK {
-        result(nil)
+        result(panel.urls.map { $0.path })
       } else {
-        result(nil)
+        result([])
       }
     }
   }
