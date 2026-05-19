@@ -754,7 +754,19 @@ class _ImagePreviewCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.file(File(path), fit: BoxFit.cover),
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) =>
+                          UploadedImageFullscreenPage(imagePath: path),
+                    ),
+                  );
+                },
+                child: Image.file(File(path), fit: BoxFit.cover),
+              ),
+            ),
             Positioned(
               right: 8,
               top: 8,
