@@ -764,7 +764,21 @@ class _ImagePreviewCard extends StatelessWidget {
                     ),
                   );
                 },
-                child: Image.file(File(path), fit: BoxFit.cover),
+                child: Image.file(
+                  File(path),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: const Color(0xFFF3F4F6),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.broken_image_outlined,
+                        color: kMuted,
+                        size: 34,
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
             Positioned(

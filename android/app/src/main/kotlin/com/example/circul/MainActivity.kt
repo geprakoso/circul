@@ -116,7 +116,8 @@ class MainActivity : FlutterActivity() {
             "image/webp" -> ".webp"
             else -> ".jpg"
         }
-        val outputFile = File.createTempFile("circul_image_", extension, cacheDir)
+        val imagesDir = File(filesDir, "circul_images").also { it.mkdirs() }
+        val outputFile = File.createTempFile("circul_image_", extension, imagesDir)
 
         contentResolver.openInputStream(uri)?.use { input ->
             FileOutputStream(outputFile).use { output ->
@@ -128,7 +129,8 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun saveBitmapToCache(bitmap: Bitmap): String? {
-        val outputFile = File.createTempFile("circul_camera_", ".jpg", cacheDir)
+        val imagesDir = File(filesDir, "circul_images").also { it.mkdirs() }
+        val outputFile = File.createTempFile("circul_camera_", ".jpg", imagesDir)
         FileOutputStream(outputFile).use { output ->
             bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
         }

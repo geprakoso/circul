@@ -352,6 +352,7 @@ class _PostImageMedia extends StatelessWidget {
     final imagePaths = post.imagePaths;
 
     if (imagePaths.isEmpty) {
+      if (post.imageAsset.isEmpty) return const SizedBox.shrink();
       return ClipRRect(
         borderRadius: BorderRadius.circular(18),
         child: Image.asset(
