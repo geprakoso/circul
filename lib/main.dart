@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'core/constants.dart';
+import 'event/event_screen.dart';
 import 'feed_post_repository.dart';
-import 'mock_data.dart';
-import 'screens.dart';
-import 'widgets.dart';
+import 'home/home_screen.dart';
+import 'map/map_screen.dart';
+import 'profile/profile_screen.dart';
+import 'search/search_screen.dart';
+import 'shared/sarah_avatar.dart';
 
 void main() {
   runApp(const CirculApp());

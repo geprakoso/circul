@@ -1,0 +1,58 @@
+import 'package:flutter/material.dart';
+
+import '../../core/constants.dart';
+
+class ProfileStats extends StatelessWidget {
+  const ProfileStats({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = [
+      ('124', 'Follower'),
+      ('198', 'Following'),
+      ('23', 'Contributions'),
+      ('8', 'Achievement'),
+    ];
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kLine),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < stats.length; i++) ...[
+            Expanded(
+              child: Column(
+                children: [
+                  Text(
+                    stats[i].$1,
+                    style: const TextStyle(
+                      color: kCirculGreen,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    stats[i].$2,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: kMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (i != stats.length - 1)
+              Container(width: 1, height: 54, color: kLine),
+          ],
+        ],
+      ),
+    );
+  }
+}

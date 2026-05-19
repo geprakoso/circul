@@ -1,0 +1,73 @@
+# Circul Screen Flow dan Struktur Refactor
+
+Dokumen ini mencatat alur screen setelah refactor agar penambahan screen, widget, atau logic baru lebih mudah dilacak.
+
+## Entry Point
+
+- `lib/main.dart` menjalankan `CirculApp`.
+- `CirculApp` memasang theme global dari `lib/core/constants.dart` dan membuka `CirculShell`.
+- `CirculShell` mengatur tab utama dengan `IndexedStack`, sehingga state tiap tab tetap hidup saat pindah tab.
+- Bottom navigation berada di `CirculBottomNav` dalam `main.dart`.
+
+## Tab Utama
+
+- Home: `lib/home/home_screen.dart`
+  - Mengambil data lewat `FeedPostRepository`.
+  - Membuka composer lewat `NewPostScreen`.
+  - Render kartu feed memakai `lib/home/widgets/feed_post_card.dart`.
+- Peta: `lib/map/map_screen.dart`
+  - Menampilkan header, kartu lokasi, map painter, marker, dan activity sheet.
+  - Tombol `Lihat semua` memanggil callback ke `CirculShell` untuk pindah ke tab Event.
+- Cari: `lib/search/search_screen.dart`
+  - Menampilkan search shell, chip trending, dan list topik dari `mock_data.dart`.
+- Event: `lib/event/event_screen.dart`
+  - Memakai data `nearbyActivities` dan komponen `ActivityCard` dari fitur map.
+- Profil: `lib/profile/profile_screen.dart`
+  - Menampilkan data profil statis, achievement, tab profil, dan preview post.
+
+## Composer Post Baru
+
+- Screen utama: `lib/new_post/new_post_screen.dart`.
+- Header/footer/tools/topic autocomplete/attachment strip dipisah di `lib/new_post/widgets/`.
+- Submit post masuk ke `FeedPostRepository.addPost`.
+- Setelah submit sukses, screen composer `pop(true)`, lalu Home refresh `getPosts()`.
+- Preview gambar lokal dan feed gambar lokal membuka `UploadedImageFullscreenPage` di `lib/image_viewer/`.
+
+## Data dan Storage
+
+- Model dan mock seed berada di `lib/mock_data.dart`.
+- Warna global berada di `lib/core/constants.dart` dan di-export lagi oleh `mock_data.dart` untuk kompatibilitas import lama.
+- Repository post berada di `lib/feed_post_repository.dart`.
+- SQLite setup berada di `lib/local_database.dart`.
+
+## Shared Widgets
+
+Widget yang dipakai lintas fitur berada di `lib/shared/` dan bisa diambil via barrel `lib/shared/shared_widgets.dart`:
+
+- `CirculHeader` dan `CirculLogo`
+- `SarahAvatar`
+- `SearchFieldShell`
+- `ChipButton`
+- `SectionTitle`
+- `NotificationIcon`
+
+## Panduan Menambah Screen Baru
+
+1. Buat folder fitur baru di `lib/<feature>/`.
+2. Taruh screen utama sebagai `lib/<feature>/<feature>_screen.dart`.
+3. Taruh komponen khusus fitur di `lib/<feature>/widgets/`.
+4. Pindahkan widget ke `lib/shared/` hanya jika dipakai oleh minimal dua fitur.
+5. Jika screen menjadi tab utama, import screen di `lib/main.dart`, tambahkan item ke list `screens`, lalu tambahkan `_NavItem` bottom navigation.
+6. Jika butuh data lokal, buat method baru di repository terkait dan biarkan screen memanggil repository, bukan langsung database.
+
+## Batas Tanggung Jawab Folder
+
+- `core/`: token global seperti warna dan theme primitives.
+- `shared/`: komponen lintas fitur tanpa logic bisnis spesifik.
+- `home/`: feed dan entry point membuat post.
+- `new_post/`: logic compose post dan attachment.
+- `image_viewer/`: preview fullscreen untuk image lokal.
+- `map/`: map, marker, activity sheet, dan activity card.
+- `search/`: search/trending/topic discovery.
+- `event/`: listing event dan aktivitas komunitas.
+- `profile/`: profil user, achievement, statistik, dan tab profil.
