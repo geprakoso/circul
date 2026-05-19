@@ -15,6 +15,7 @@ Dokumen ini mencatat alur screen setelah refactor agar penambahan screen, widget
   - Mengambil data lewat `FeedPostRepository`.
   - Membuka composer lewat `NewPostScreen`.
   - Render kartu feed memakai `lib/home/widgets/feed_post_card.dart`.
+  - Tap area isi post atau icon komentar membuka `CommentScreen`.
 - Peta: `lib/map/map_screen.dart`
   - Menampilkan header, kartu lokasi, map painter, marker, dan activity sheet.
   - Tombol `Lihat semua` memanggil callback ke `CirculShell` untuk pindah ke tab Event.
@@ -33,11 +34,22 @@ Dokumen ini mencatat alur screen setelah refactor agar penambahan screen, widget
 - Setelah submit sukses, screen composer `pop(true)`, lalu Home refresh `getPosts()`.
 - Preview gambar lokal dan feed gambar lokal membuka `UploadedImageFullscreenPage` di `lib/image_viewer/`.
 
+## Comment Screen
+
+- Screen utama: `lib/comments/comment_screen.dart`.
+- Dibuka dari Home melalui callback `FeedPostCard.onOpenComments`.
+- `FeedPostCard` tetap reusable: jika `onOpenComments` tidak dikirim, kartu hanya tampil tanpa navigasi komentar.
+- `CommentScreen` membaca dan menambah komentar lewat `CommentRepository`.
+- Struktur SQLite komentar ada di tabel `post_comments`, terhubung ke `feed_posts.id` lewat `post_id`.
+- Data `postComments` di `lib/mock_data.dart` dipakai sebagai seed/fallback untuk komentar awal.
+- Composer bawah menyimpan komentar lokal ke SQLite dan menaikkan counter `comments` pada post terkait.
+
 ## Data dan Storage
 
 - Model dan mock seed berada di `lib/mock_data.dart`.
 - Warna global berada di `lib/core/constants.dart` dan di-export lagi oleh `mock_data.dart` untuk kompatibilitas import lama.
 - Repository post berada di `lib/feed_post_repository.dart`.
+- Repository komentar berada di `lib/comment_repository.dart`.
 - SQLite setup berada di `lib/local_database.dart`.
 
 ## Shared Widgets
@@ -65,6 +77,7 @@ Widget yang dipakai lintas fitur berada di `lib/shared/` dan bisa diambil via ba
 - `core/`: token global seperti warna dan theme primitives.
 - `shared/`: komponen lintas fitur tanpa logic bisnis spesifik.
 - `home/`: feed dan entry point membuat post.
+- `comments/`: detail post, daftar komentar, dan composer response.
 - `new_post/`: logic compose post dan attachment.
 - `image_viewer/`: preview fullscreen untuk image lokal.
 - `map/`: map, marker, activity sheet, dan activity card.

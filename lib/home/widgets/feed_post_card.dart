@@ -12,14 +12,21 @@ class FeedPostCard extends StatelessWidget {
     required this.post,
     this.compact = false,
     this.framed = false,
+    this.onOpenComments,
   });
 
   final FeedPost post;
   final bool compact;
   final bool framed;
+  final VoidCallback? onOpenComments;
 
   @override
   Widget build(BuildContext context) {
+    final title = post.title.trim();
+    final topic = post.topic.trim();
+    final showTitle =
+        title.isNotEmpty && title.toLowerCase() != topic.toLowerCase();
+
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -56,14 +63,16 @@ class FeedPostCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  Text(
-                    post.title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      height: 1.35,
+                  if (showTitle) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        height: 1.35,
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 10),
                   Text(
                     post.body,
@@ -73,7 +82,11 @@ class FeedPostCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  _PostImageMedia(post: post, compact: compact),
+                  _PostImageMedia(
+                    post: post,
+                    compact: compact,
+                    onTap: onOpenComments,
+                  ),
                   if (!compact) ...[
                     const SizedBox(height: 18),
                     Row(
@@ -86,6 +99,7 @@ class FeedPostCard extends StatelessWidget {
                         _ActionButton(
                           icon: Icons.chat_bubble_outline_rounded,
                           text: '${post.comments}',
+                          onTap: onOpenComments,
                         ),
                         const SizedBox(width: 12),
                         const _ActionButton(
@@ -107,6 +121,13 @@ class FeedPostCard extends StatelessWidget {
         ),
       ],
     );
+    final tappableContent = onOpenComments == null
+        ? content
+        : GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: onOpenComments,
+            child: content,
+          );
 
     if (!framed) {
       return Padding(
@@ -116,7 +137,7 @@ class FeedPostCard extends StatelessWidget {
           18,
           compact ? 10 : 28,
         ),
-        child: content,
+        child: tappableContent,
       );
     }
 
@@ -128,16 +149,21 @@ class FeedPostCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: kLine),
       ),
-      child: content,
+      child: tappableContent,
     );
   }
 }
 
 class _PostImageMedia extends StatelessWidget {
-  const _PostImageMedia({required this.post, required this.compact});
+  const _PostImageMedia({
+    required this.post,
+    required this.compact,
+    this.onTap,
+  });
 
   final FeedPost post;
   final bool compact;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -160,6 +186,7 @@ class _PostImageMedia extends StatelessWidget {
       return _LocalPostImage(
         path: imagePaths.first,
         height: compact ? 190 : 230,
+        onTap: onTap,
       );
     }
 
@@ -176,6 +203,7 @@ class _PostImageMedia extends StatelessWidget {
             child: _LocalPostImage(
               path: imagePaths[index],
               height: compact ? 190 : 230,
+              onTap: onTap,
             ),
           );
         },
@@ -185,15 +213,21 @@ class _PostImageMedia extends StatelessWidget {
 }
 
 class _LocalPostImage extends StatelessWidget {
-  const _LocalPostImage({required this.path, required this.height});
+  const _LocalPostImage({required this.path, required this.height, this.onTap});
 
   final String path;
   final double height;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
+        if (onTap != null) {
+          onTap!();
+          return;
+        }
+
         Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (context) => UploadedImageFullscreenPage(imagePath: path),
@@ -263,21 +297,17 @@ class _Dot extends StatelessWidget {
 }
 
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.icon, required this.text});
+  const _ActionButton({required this.icon, required this.text, this.onTap});
 
   final IconData icon;
   final String text;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final content = Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kLine),
-      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -288,6 +318,22 @@ class _ActionButton extends StatelessWidget {
             style: const TextStyle(color: kMuted, fontWeight: FontWeight.w600),
           ),
         ],
+      ),
+    );
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: kLine),
+          ),
+          child: content,
+        ),
       ),
     );
   }

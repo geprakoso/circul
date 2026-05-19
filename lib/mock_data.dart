@@ -9,6 +9,7 @@ const cleanupAsset = 'assets/images/activity_cleanup.png';
 
 class FeedPost {
   const FeedPost({
+    this.id = '',
     required this.author,
     required this.city,
     required this.timeAgo,
@@ -21,6 +22,7 @@ class FeedPost {
     this.imagePaths = const [],
   });
 
+  final String id;
   final String author;
   final String city;
   final String timeAgo;
@@ -65,6 +67,28 @@ class ActivityItem {
   final IconData icon;
 }
 
+class PostComment {
+  const PostComment({
+    this.id = '',
+    this.postId = '',
+    required this.author,
+    required this.timeAgo,
+    required this.body,
+    required this.initials,
+    required this.avatarColor,
+    this.likes = 0,
+  });
+
+  final String id;
+  final String postId;
+  final String author;
+  final String timeAgo;
+  final String body;
+  final String initials;
+  final Color avatarColor;
+  final int likes;
+}
+
 const feedPosts = [
   FeedPost(
     author: 'sarahmae',
@@ -89,6 +113,23 @@ const feedPosts = [
     topic: 'Edukasi Lingkungan',
     likes: 98,
     comments: 16,
+  ),
+];
+
+const postComments = [
+  PostComment(
+    author: 'CaterineWilz',
+    timeAgo: 'Baru saja',
+    body: 'Wow bagus sekali, bisa belajar bersama kayak gitu.',
+    initials: 'CW',
+    avatarColor: Color(0xFFE98B64),
+  ),
+  PostComment(
+    author: 'MillianJanesa',
+    timeAgo: 'Baru saja',
+    body: 'Pengen deh kayak gitu....',
+    initials: 'MJ',
+    avatarColor: Color(0xFF86A9A8),
   ),
 ];
 

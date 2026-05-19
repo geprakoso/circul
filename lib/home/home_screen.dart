@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../comments/comment_screen.dart';
 import '../feed_post_repository.dart';
 import '../mock_data.dart';
 import '../new_post/new_post_screen.dart';
@@ -39,6 +40,12 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Postingan komunitas tersimpan lokal.')),
+    );
+  }
+
+  void _openComments(FeedPost post) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (context) => CommentScreen(post: post)),
     );
   }
 
@@ -96,7 +103,11 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (context, index) {
               if (index == 0) return _HomeHeader(onComposeTap: _openComposer);
 
-              return FeedPostCard(post: posts[index - 1]);
+              final post = posts[index - 1];
+              return FeedPostCard(
+                post: post,
+                onOpenComments: () => _openComments(post),
+              );
             },
           );
         },

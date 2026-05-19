@@ -24,6 +24,23 @@ void main() {
       findsOneWidget,
     );
 
+    await tester.tap(
+      find.text(
+        'Beberapa hal kecil yang aku lakukan dan lumayan berdampak. Yuk mulai bareng-bareng!',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Give your response'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('CaterineWilz'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('CaterineWilz'), findsOneWidget);
+
+    Navigator.of(tester.element(find.text('Give your response'))).pop();
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Cari'));
     await tester.pumpAndSettle();
     expect(find.text('Search'), findsOneWidget);

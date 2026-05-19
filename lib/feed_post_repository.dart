@@ -91,6 +91,7 @@ class FeedPostRepository {
 
   FeedPost _postFromRow(Map<String, Object?> row) {
     return FeedPost(
+      id: row['id'] as String,
       author: row['author'] as String,
       city: row['city'] as String,
       timeAgo: row['time_ago'] as String,
