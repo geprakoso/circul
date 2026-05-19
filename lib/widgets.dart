@@ -249,9 +249,9 @@ class FeedPostCard extends StatelessWidget {
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                       ),
-                      if (!compact) ...[
+                      if (!compact && post.topic.isNotEmpty) ...[
                         const SizedBox(width: 10),
-                        _Pill(text: post.city),
+                        _Pill(text: post.topic),
                         const SizedBox(width: 10),
                         const _Dot(),
                       ],

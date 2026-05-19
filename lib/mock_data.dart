@@ -21,6 +21,7 @@ class FeedPost {
     required this.imageAsset,
     required this.likes,
     required this.comments,
+    this.topic = '',
     this.imagePaths = const [],
   });
 
@@ -30,6 +31,7 @@ class FeedPost {
   final String title;
   final String body;
   final String imageAsset;
+  final String topic;
   final List<String> imagePaths;
   final int likes;
   final int comments;
@@ -76,6 +78,7 @@ const feedPosts = [
     body:
         'Beberapa hal kecil yang aku lakukan dan lumayan berdampak. Yuk mulai bareng-bareng!',
     imageAsset: zeroWasteAsset,
+    topic: 'Zero Waste',
     likes: 142,
     comments: 28,
   ),
@@ -87,6 +90,7 @@ const feedPosts = [
     body:
         'Beberapa rekomendasi buku yang bikin aku lebih sadar dan termotivasi untuk hidup berkelanjutan.',
     imageAsset: booksAsset,
+    topic: 'Edukasi Lingkungan',
     likes: 98,
     comments: 16,
   ),
