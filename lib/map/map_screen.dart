@@ -22,11 +22,29 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen>
+    with SingleTickerProviderStateMixin {
   final _mapController = MapController();
+  late final AnimationController _cameraAnimationController;
   var _currentLocation = _gondangManisCenter;
   var _isLocating = false;
   var _flagMenuExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cameraAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+  }
+
+  @override
+  void dispose() {
+    _cameraAnimationController.dispose();
+    _mapController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +137,7 @@ class _MapScreenState extends State<MapScreen> {
       if (!mounted) return;
 
       setState(() => _currentLocation = point);
-      _mapController.move(point, 17);
+      _animateMapTo(point, 17);
     } catch (_) {
       if (!mounted) return;
       _showLocationMessage('Tidak bisa mengambil lokasi saat ini.');
@@ -169,6 +187,50 @@ class _MapScreenState extends State<MapScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _animateMapTo(LatLng center, double zoom) {
+    _cameraAnimationController.stop();
+
+    final centerAnimation =
+        _LatLngTween(begin: _mapController.camera.center, end: center).animate(
+          CurvedAnimation(
+            parent: _cameraAnimationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+    final zoomAnimation =
+        Tween<double>(begin: _mapController.camera.zoom, end: zoom).animate(
+          CurvedAnimation(
+            parent: _cameraAnimationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+
+    void moveCamera() {
+      _mapController.move(centerAnimation.value, zoomAnimation.value);
+    }
+
+    _cameraAnimationController
+      ..addListener(moveCamera)
+      ..forward(from: 0).whenCompleteOrCancel(() {
+        _cameraAnimationController.removeListener(moveCamera);
+      });
+  }
+}
+
+class _LatLngTween extends Tween<LatLng> {
+  _LatLngTween({required super.begin, required super.end});
+
+  @override
+  LatLng lerp(double t) {
+    final start = begin!;
+    final target = end!;
+
+    return LatLng(
+      start.latitude + (target.latitude - start.latitude) * t,
+      start.longitude + (target.longitude - start.longitude) * t,
+    );
   }
 }
 
@@ -229,18 +291,18 @@ class _FlagActionMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!expanded) {
-      return _FloatingIconButton(
-        icon: Icons.flag_outlined,
-        iconColor: const Color(0xFF777777),
-        label: 'Buka aksi check-in',
-        onPressed: onToggle,
-      );
-    }
+    const buttonSize = 62.0;
+    const actionWidth = 138.0;
+    const expandedWidth = buttonSize + actionWidth * 2;
+    const animationDuration = Duration(milliseconds: 320);
+    const animationCurve = Curves.easeOutCubic;
 
     return Material(
       color: Colors.transparent,
-      child: Container(
+      child: AnimatedContainer(
+        duration: animationDuration,
+        curve: animationCurve,
+        width: expanded ? expandedWidth : buttonSize,
         height: 62,
         decoration: BoxDecoration(
           color: Colors.white,
@@ -254,79 +316,68 @@ class _FlagActionMenu extends StatelessWidget {
           ],
         ),
         clipBehavior: Clip.antiAlias,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Stack(
+          alignment: Alignment.centerRight,
           children: [
-            _FlagMenuAction(
-              icon: Icons.arrow_downward_rounded,
-              label: 'Check-in',
-              color: const Color(0xFF8A1D2A),
-              backgroundColor: const Color(0xFFFFF4F4),
-              onPressed: onCheckIn,
-            ),
-            _FlagMenuAction(
-              icon: Icons.arrow_upward_rounded,
-              label: 'Check-out',
-              color: const Color(0xFF0B5E35),
-              backgroundColor: const Color(0xFFE8FCF6),
-              onPressed: onCheckOut,
+            Positioned(
+              top: 0,
+              right: buttonSize,
+              bottom: 0,
+              width: actionWidth * 2,
+              child: IgnorePointer(
+                ignoring: !expanded,
+                child: ClipRect(
+                  child: AnimatedSlide(
+                    duration: animationDuration,
+                    curve: animationCurve,
+                    offset: expanded ? Offset.zero : const Offset(1, 0),
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 180),
+                      opacity: expanded ? 1 : 0,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          _FlagMenuAction(
+                            icon: Icons.arrow_downward_rounded,
+                            label: 'Check-in',
+                            color: const Color(0xFF8A1D2A),
+                            backgroundColor: const Color(0xFFFFF4F4),
+                            onPressed: onCheckIn,
+                          ),
+                          _FlagMenuAction(
+                            icon: Icons.arrow_upward_rounded,
+                            label: 'Check-out',
+                            color: const Color(0xFF0B5E35),
+                            backgroundColor: const Color(0xFFE8FCF6),
+                            onPressed: onCheckOut,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
             Semantics(
               button: true,
-              label: 'Tutup aksi check-in',
+              label: expanded ? 'Tutup aksi check-in' : 'Buka aksi check-in',
               child: InkWell(
                 onTap: onToggle,
-                child: Container(
-                  width: 70,
-                  height: 62,
-                  color: const Color(0xFF3498F6),
-                  alignment: Alignment.center,
-                  child: const Icon(
+                child: AnimatedContainer(
+                  duration: animationDuration,
+                  curve: animationCurve,
+                  width: buttonSize,
+                  height: buttonSize,
+                  color: expanded ? const Color(0xFF3498F6) : Colors.white,
+                  child: Icon(
                     Icons.flag_outlined,
-                    color: Colors.white,
+                    color: expanded ? Colors.white : const Color(0xFF777777),
                     size: 34,
                   ),
                 ),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FloatingIconButton extends StatelessWidget {
-  const _FloatingIconButton({
-    required this.icon,
-    required this.iconColor,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        elevation: 7,
-        shadowColor: const Color(0x33000000),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(18),
-          child: SizedBox(
-            width: 62,
-            height: 62,
-            child: Icon(icon, color: iconColor, size: 34),
-          ),
         ),
       ),
     );
@@ -353,23 +404,27 @@ class _FlagMenuAction extends StatelessWidget {
     return InkWell(
       onTap: onPressed,
       child: Container(
+        width: 138,
         height: 62,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         color: backgroundColor,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 26),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
