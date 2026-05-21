@@ -2,6 +2,7 @@ import 'package:circul/feed_post_repository.dart';
 import 'package:circul/main.dart';
 import 'package:circul/mock_data.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -57,10 +58,10 @@ void main() {
 
     await tester.tap(find.text('Peta'));
     await tester.pumpAndSettle();
-    expect(find.text('Gondang Manis, Solo'), findsOneWidget);
-    expect(find.text('Aktivitas di sekitarmu'), findsOneWidget);
+    expect(find.byType(FlutterMap), findsOneWidget);
+    expect(find.byType(TileLayer), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(FilledButton, 'Lihat semua'));
+    await tester.tap(find.text('Event'));
     await tester.pumpAndSettle();
     expect(find.text('Event'), findsWidgets);
     expect(find.text('Aksi Bersih Sungai Pepe'), findsWidgets);

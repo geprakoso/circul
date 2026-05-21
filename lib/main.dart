@@ -58,7 +58,7 @@ class _CirculShellState extends State<CirculShell> {
   Widget build(BuildContext context) {
     final screens = [
       HomeScreen(feedPostRepository: widget.feedPostRepository),
-      MapScreen(onSeeAll: () => setState(() => _index = 3)),
+      const MapScreen(),
       const SearchScreen(),
       const EventScreen(),
       const ProfileScreen(),

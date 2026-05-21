@@ -1,185 +1,222 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/constants.dart';
-import '../shared/circul_header.dart';
-import 'widgets/activity_sheet.dart';
-import 'widgets/impact_legend.dart';
-import 'widgets/location_bubble.dart';
-import 'widgets/map_marker.dart';
-import 'widgets/map_square_button.dart';
-import 'widgets/waste_map_painter.dart';
 
-class MapScreen extends StatefulWidget {
-  const MapScreen({super.key, required this.onSeeAll});
+const _gondangManisCenter = LatLng(-7.5584, 110.8199);
+const _osmTileTemplate = String.fromEnvironment(
+  'OSM_TILE_URL_TEMPLATE',
+  defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+);
+const _osmUserAgentPackageName = String.fromEnvironment(
+  'OSM_USER_AGENT_PACKAGE_NAME',
+  defaultValue: 'com.example.circul',
+);
 
-  final VoidCallback onSeeAll;
-
-  @override
-  State<MapScreen> createState() => _MapScreenState();
-}
-
-class _MapScreenState extends State<MapScreen> {
-  var _selectedCategory = 'Semua';
+class MapScreen extends StatelessWidget {
+  const MapScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Column(
-        children: [
-          const CirculHeader(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-            child: Container(
-              height: 76,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: kLine),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.location_on_outlined,
-                    color: kCirculGreen,
-                    size: 31,
-                  ),
-                  const SizedBox(width: 14),
-                  const Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Lokasi saat ini',
-                          style: TextStyle(color: kMuted),
-                        ),
-                        SizedBox(height: 3),
-                        Text(
-                          'Gondang Manis, Solo',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(width: 1, height: 48, color: kLine),
-                  const SizedBox(width: 16),
-                  const Icon(
-                    Icons.energy_savings_leaf_rounded,
-                    color: Color(0xFF62BF65),
-                    size: 28,
-                  ),
-                  const SizedBox(width: 12),
-                  const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Dampak lingkungan',
-                        style: TextStyle(color: kMuted),
-                      ),
-                      SizedBox(height: 3),
-                      Text(
-                        'Sedang',
-                        style: TextStyle(
-                          color: Color(0xFFE68A00),
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Icon(Icons.keyboard_arrow_down_rounded),
-                ],
-              ),
+    return FlutterMap(
+      options: const MapOptions(
+        initialCenter: _gondangManisCenter,
+        initialZoom: 16,
+        minZoom: 12,
+        maxZoom: 19,
+        interactionOptions: InteractionOptions(
+          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+        ),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: _osmTileTemplate,
+          userAgentPackageName: _osmUserAgentPackageName,
+          maxNativeZoom: 19,
+        ),
+        CircleLayer(circles: _impactCircles()),
+        MarkerLayer(
+          markers: [
+            const Marker(
+              point: _gondangManisCenter,
+              width: 72,
+              height: 72,
+              child: _CurrentLocationMarker(),
             ),
-          ),
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(child: CustomPaint(painter: WasteMapPainter())),
-                const Positioned(left: 20, top: 22, child: ImpactLegend()),
-                const Positioned(
-                  right: 28,
-                  top: 30,
-                  child: MapSquareButton(icon: Icons.my_location_rounded),
-                ),
-                const Positioned(
-                  left: 24,
-                  bottom: 304,
-                  child: MapSquareButton(
-                    icon: Icons.tune_rounded,
-                    label: 'Filter',
-                  ),
-                ),
-                const Positioned(
-                  right: 30,
-                  bottom: 304,
-                  child: MapSquareButton(
-                    icon: Icons.near_me_rounded,
-                    label: 'Lokasi saya',
-                  ),
-                ),
-                const Positioned(
-                  left: 360,
-                  top: 272,
-                  child: MapMarker(
-                    label: 'Pasar\nTokanan',
-                    distance: '450 m',
-                    color: Color(0xFF7B2CBF),
-                    icon: Icons.local_mall_rounded,
-                  ),
-                ),
-                const Positioned(
-                  left: 52,
-                  top: 430,
-                  child: MapMarker(
-                    label: 'Taman\nGondang Manis',
-                    distance: '350 m',
-                    color: kCirculGreen,
-                    icon: Icons.park_rounded,
-                  ),
-                ),
-                const Positioned(
-                  right: 42,
-                  top: 590,
-                  child: MapMarker(
-                    label: 'Bengkel Las\nSunan Karan',
-                    distance: '200 m',
-                    color: Color(0xFF7B2CBF),
-                    icon: Icons.factory_rounded,
-                  ),
-                ),
-                const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      LocationBubble(),
-                      SizedBox(height: 4),
-                      UserLocationPulse(),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: ActivitySheet(
-                    selectedCategory: _selectedCategory,
-                    onCategoryChanged: (value) =>
-                        setState(() => _selectedCategory = value),
-                    onSeeAll: widget.onSeeAll,
-                  ),
-                ),
-              ],
+            for (final activity in _mapActivities)
+              Marker(
+                point: activity.point,
+                width: 52,
+                height: 52,
+                alignment: Alignment.topCenter,
+                child: _ActivityMarker(activity: activity),
+              ),
+          ],
+        ),
+        const RichAttributionWidget(
+          attributions: [TextSourceAttribution('OpenStreetMap contributors')],
+        ),
+      ],
+    );
+  }
+}
+
+List<CircleMarker> _impactCircles() {
+  return [
+    for (final spot in _impactSpots) ...[
+      CircleMarker(
+        point: spot.point,
+        radius: spot.radiusMeters * 1.9,
+        useRadiusInMeter: true,
+        color: const Color(0xFF5B4BFF).withValues(alpha: .22),
+      ),
+      CircleMarker(
+        point: spot.point,
+        radius: spot.radiusMeters * 1.35,
+        useRadiusInMeter: true,
+        color: Colors.greenAccent.withValues(alpha: .34),
+      ),
+      CircleMarker(
+        point: spot.point,
+        radius: spot.radiusMeters * .82,
+        useRadiusInMeter: true,
+        color: Colors.yellow.withValues(alpha: spot.intensity * .46),
+      ),
+      if (spot.intensity > .72)
+        CircleMarker(
+          point: spot.point,
+          radius: spot.radiusMeters * .48,
+          useRadiusInMeter: true,
+          color: Colors.redAccent.withValues(alpha: spot.intensity * .62),
+        ),
+    ],
+  ];
+}
+
+class _CurrentLocationMarker extends StatelessWidget {
+  const _CurrentLocationMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: kCirculGreen.withValues(alpha: .18),
+        shape: BoxShape.circle,
+        border: Border.all(color: kCirculGreen.withValues(alpha: .32)),
+      ),
+      alignment: Alignment.center,
+      child: Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: const Color(0xFF22C77A),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 3),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 8,
+              offset: Offset(0, 3),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
+
+class _ActivityMarker extends StatelessWidget {
+  const _ActivityMarker({required this.activity});
+
+  final _MapActivity activity;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x26000000),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: activity.color, width: 3),
+      ),
+      child: Icon(activity.icon, color: activity.color, size: 25),
+    );
+  }
+}
+
+class _MapActivity {
+  const _MapActivity({
+    required this.point,
+    required this.icon,
+    required this.color,
+  });
+
+  final LatLng point;
+  final IconData icon;
+  final Color color;
+}
+
+class _ImpactSpot {
+  const _ImpactSpot({
+    required this.point,
+    required this.radiusMeters,
+    required this.intensity,
+  });
+
+  final LatLng point;
+  final double radiusMeters;
+  final double intensity;
+}
+
+const _mapActivities = [
+  _MapActivity(
+    point: LatLng(-7.5559, 110.8186),
+    icon: Icons.delete_outline_rounded,
+    color: Color(0xFF7B2CBF),
+  ),
+  _MapActivity(
+    point: LatLng(-7.5571, 110.8214),
+    icon: Icons.campaign_rounded,
+    color: kCirculGreen,
+  ),
+  _MapActivity(
+    point: LatLng(-7.5606, 110.8192),
+    icon: Icons.event_rounded,
+    color: Color(0xFF7B2CBF),
+  ),
+];
+
+const _impactSpots = [
+  _ImpactSpot(
+    point: LatLng(-7.5546, 110.8184),
+    radiusMeters: 52,
+    intensity: .82,
+  ),
+  _ImpactSpot(
+    point: LatLng(-7.5568, 110.8202),
+    radiusMeters: 44,
+    intensity: .62,
+  ),
+  _ImpactSpot(
+    point: LatLng(-7.5595, 110.8178),
+    radiusMeters: 38,
+    intensity: .58,
+  ),
+  _ImpactSpot(
+    point: LatLng(-7.5612, 110.8185),
+    radiusMeters: 92,
+    intensity: .96,
+  ),
+  _ImpactSpot(
+    point: LatLng(-7.5582, 110.8223),
+    radiusMeters: 40,
+    intensity: .48,
+  ),
+];

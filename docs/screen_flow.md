@@ -17,8 +17,10 @@ Dokumen ini mencatat alur screen setelah refactor agar penambahan screen, widget
   - Render kartu feed memakai `lib/home/widgets/feed_post_card.dart`.
   - Tap area isi post atau icon komentar membuka `CommentScreen`.
 - Peta: `lib/map/map_screen.dart`
-  - Menampilkan header, kartu lokasi, map painter, marker, dan activity sheet.
-  - Tombol `Lihat semua` memanggil callback ke `CirculShell` untuk pindah ke tab Event.
+  - Menampilkan peta interaktif berbasis OpenStreetMap tile API lewat `flutter_map`.
+  - Overlay titik aktivitas dan heat impact masih dirender lokal di atas tile OSM.
+  - Tile URL bisa diganti saat build lewat `OSM_TILE_URL_TEMPLATE` dan user-agent lewat `OSM_USER_AGENT_PACKAGE_NAME`.
+  - Platform app harus punya izin internet; Android memakai `INTERNET`, macOS memakai entitlement `network.client`.
 - Cari: `lib/search/search_screen.dart`
   - Menampilkan search shell, chip trending, dan list topik dari `mock_data.dart`.
 - Event: `lib/event/event_screen.dart`
@@ -80,7 +82,7 @@ Widget yang dipakai lintas fitur berada di `lib/shared/` dan bisa diambil via ba
 - `comments/`: detail post, daftar komentar, dan composer response.
 - `new_post/`: logic compose post dan attachment.
 - `image_viewer/`: preview fullscreen untuk image lokal.
-- `map/`: map, marker, activity sheet, dan activity card.
+- `map/`: OpenStreetMap view, overlay peta, dan activity card yang masih dipakai Event.
 - `search/`: search/trending/topic discovery.
 - `event/`: listing event dan aktivitas komunitas.
 - `profile/`: profil user, achievement, statistik, dan tab profil.
