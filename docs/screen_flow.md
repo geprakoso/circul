@@ -21,6 +21,8 @@ Dokumen ini mencatat alur screen setelah refactor agar penambahan screen, widget
   - Overlay titik aktivitas dan heat impact masih dirender lokal di atas tile OSM.
   - Tile URL bisa diganti saat build lewat `OSM_TILE_URL_TEMPLATE` dan user-agent lewat `OSM_USER_AGENT_PACKAGE_NAME`.
   - Platform app harus punya izin internet; Android memakai `INTERNET`, macOS memakai entitlement `network.client`.
+  - Tombol kanan bawah meminta izin lokasi lewat `geolocator`, lalu memusatkan peta ke lokasi pengguna.
+  - Tombol flag di atas tombol lokasi membuka tray aksi `Check-in` dan `Check-out`.
 - Cari: `lib/search/search_screen.dart`
   - Menampilkan search shell, chip trending, dan list topik dari `mock_data.dart`.
 - Event: `lib/event/event_screen.dart`

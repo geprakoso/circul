@@ -60,6 +60,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(FlutterMap), findsOneWidget);
     expect(find.byType(TileLayer), findsOneWidget);
+    expect(find.byIcon(Icons.my_location_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.flag_outlined), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.flag_outlined));
+    await tester.pumpAndSettle();
+    expect(find.text('Check-in'), findsOneWidget);
+    expect(find.text('Check-out'), findsOneWidget);
 
     await tester.tap(find.text('Event'));
     await tester.pumpAndSettle();
