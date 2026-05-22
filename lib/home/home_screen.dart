@@ -8,9 +8,10 @@ import '../shared/shared_widgets.dart';
 import 'widgets/feed_post_card.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.feedPostRepository});
+  const HomeScreen({super.key, this.feedPostRepository, this.onMapButtonTap});
 
   final FeedPostRepository? feedPostRepository;
+  final VoidCallback? onMapButtonTap;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -53,64 +54,107 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return SafeArea(
       bottom: false,
-      child: FutureBuilder<List<FeedPost>>(
-        future: _postsFuture,
-        builder: (context, snapshot) {
-          final posts = snapshot.data ?? const <FeedPost>[];
+      child: Stack(
+        children: [
+          FutureBuilder<List<FeedPost>>(
+            future: _postsFuture,
+            builder: (context, snapshot) {
+              final posts = snapshot.data ?? const <FeedPost>[];
 
-          if (snapshot.hasError) {
-            return ListView(
-              padding: const EdgeInsets.only(bottom: 18),
-              children: [
-                _HomeHeader(onComposeTap: _openComposer),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 36, 24, 0),
-                  child: Text(
-                    'Database lokal belum bisa dibuka.',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+              if (snapshot.hasError) {
+                return ListView(
+                  padding: const EdgeInsets.only(bottom: 138),
+                  children: [
+                    _HomeHeader(onComposeTap: _openComposer),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 36, 24, 0),
+                      child: Text(
+                        'Database lokal belum bisa dibuka.',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
                     ),
-                  ),
-                ),
-              ],
-            );
-          }
+                  ],
+                );
+              }
 
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              posts.isEmpty) {
-            return ListView(
-              padding: const EdgeInsets.only(bottom: 18),
-              children: [
-                _HomeHeader(onComposeTap: _openComposer),
-                const SizedBox(height: 36),
-                const Center(child: CircularProgressIndicator()),
-              ],
-            );
-          }
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  posts.isEmpty) {
+                return ListView(
+                  padding: const EdgeInsets.only(bottom: 138),
+                  children: [
+                    _HomeHeader(onComposeTap: _openComposer),
+                    const SizedBox(height: 36),
+                    const Center(child: CircularProgressIndicator()),
+                  ],
+                );
+              }
 
-          return ListView.separated(
-            padding: const EdgeInsets.only(bottom: 18),
-            itemCount: posts.length + 1,
-            separatorBuilder: (context, index) {
-              if (index < 1) return const SizedBox.shrink();
-              return const Divider(
-                height: 1,
-                indent: 24,
-                endIndent: 24,
-                color: kLine,
+              return ListView.separated(
+                padding: const EdgeInsets.only(bottom: 138),
+                itemCount: posts.length + 1,
+                separatorBuilder: (context, index) {
+                  if (index < 1) return const SizedBox.shrink();
+                  return const Divider(
+                    height: 1,
+                    indent: 24,
+                    endIndent: 24,
+                    color: kLine,
+                  );
+                },
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _HomeHeader(onComposeTap: _openComposer);
+                  }
+
+                  final post = posts[index - 1];
+                  return FeedPostCard(
+                    post: post,
+                    onOpenComments: () => _openComments(post),
+                  );
+                },
               );
             },
-            itemBuilder: (context, index) {
-              if (index == 0) return _HomeHeader(onComposeTap: _openComposer);
+          ),
+          Positioned(
+            right: 24,
+            bottom: 24,
+            child: _HomeMapButton(onTap: widget.onMapButtonTap ?? () {}),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-              final post = posts[index - 1];
-              return FeedPostCard(
-                post: post,
-                onOpenComments: () => _openComments(post),
-              );
-            },
-          );
-        },
+class _HomeMapButton extends StatelessWidget {
+  const _HomeMapButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Buka peta',
+      child: Material(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(28),
+        elevation: 10,
+        shadowColor: const Color(0x55000000),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28),
+          child: const SizedBox(
+            width: 96,
+            height: 96,
+            child: Icon(
+              Icons.location_on_outlined,
+              color: Colors.white,
+              size: 64,
+            ),
+          ),
+        ),
       ),
     );
   }

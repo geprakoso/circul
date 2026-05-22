@@ -57,7 +57,10 @@ class _CirculShellState extends State<CirculShell> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      HomeScreen(feedPostRepository: widget.feedPostRepository),
+      HomeScreen(
+        feedPostRepository: widget.feedPostRepository,
+        onMapButtonTap: () => setState(() => _index = 1),
+      ),
       const MapScreen(),
       const SearchScreen(),
       const EventScreen(),
