@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../check_in/capture_result_screen.dart';
 import '../comments/comment_screen.dart';
 import '../feed_post_repository.dart';
 import '../mock_data.dart';
@@ -8,10 +11,14 @@ import '../shared/shared_widgets.dart';
 import 'widgets/feed_post_card.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.feedPostRepository, this.onMapButtonTap});
+  const HomeScreen({
+    super.key,
+    this.feedPostRepository,
+    ImagePicker? imagePicker,
+  }) : _imagePicker = imagePicker;
 
   final FeedPostRepository? feedPostRepository;
-  final VoidCallback? onMapButtonTap;
+  final ImagePicker? _imagePicker;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -20,12 +27,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final FeedPostRepository _repository;
   late Future<List<FeedPost>> _postsFuture;
+  late final ImagePicker _imagePicker;
 
   @override
   void initState() {
     super.initState();
     _repository = widget.feedPostRepository ?? FeedPostRepository();
     _postsFuture = _repository.getPosts();
+    _imagePicker = widget._imagePicker ?? ImagePicker();
   }
 
   Future<void> _openComposer() async {
@@ -48,6 +57,30 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (context) => CommentScreen(post: post)),
     );
+  }
+
+  Future<void> _openCheckInCamera() async {
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 92,
+        maxWidth: 1800,
+      );
+      if (!mounted || image == null) return;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => CaptureResultScreen(imagePath: image.path),
+        ),
+      );
+    } on PlatformException catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Kamera belum bisa dibuka.')),
+        );
+    }
   }
 
   @override
@@ -119,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Positioned(
             right: 24,
             bottom: 24,
-            child: _HomeMapButton(onTap: widget.onMapButtonTap ?? () {}),
+            child: _HomeCheckInButton(onTap: _openCheckInCamera),
           ),
         ],
       ),
@@ -127,8 +160,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _HomeMapButton extends StatelessWidget {
-  const _HomeMapButton({required this.onTap});
+class _HomeCheckInButton extends StatelessWidget {
+  const _HomeCheckInButton({required this.onTap});
 
   final VoidCallback onTap;
 
@@ -136,7 +169,7 @@ class _HomeMapButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Buka peta',
+      label: 'Check-in',
       child: Material(
         color: Colors.black,
         borderRadius: BorderRadius.circular(28),
@@ -149,7 +182,7 @@ class _HomeMapButton extends StatelessWidget {
             width: 96,
             height: 96,
             child: Icon(
-              Icons.location_on_outlined,
+              Icons.add_location_alt_outlined,
               color: Colors.white,
               size: 64,
             ),

@@ -68,6 +68,15 @@ void main() {
     expect(find.text('Check-in'), findsOneWidget);
     expect(find.text('Check-out'), findsOneWidget);
 
+    await tester.tap(find.text('Check-in'));
+    await tester.pumpAndSettle();
+    expect(find.text('Capture Result'), findsOneWidget);
+    expect(find.text('Step 2 of 3'), findsOneWidget);
+    expect(find.text('Is the environment\nup or down?'), findsOneWidget);
+
+    Navigator.of(tester.element(find.text('Capture Result'))).pop();
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Event'));
     await tester.pumpAndSettle();
     expect(find.text('Event'), findsWidgets);

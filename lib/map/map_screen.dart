@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../check_in/capture_result_screen.dart';
 import '../core/constants.dart';
 
 const _gondangManisCenter = LatLng(-7.5584, 110.8199);
@@ -109,7 +110,7 @@ class _MapScreenState extends State<MapScreen>
             expanded: _flagMenuExpanded,
             onToggle: () =>
                 setState(() => _flagMenuExpanded = !_flagMenuExpanded),
-            onCheckIn: () => _showLocationMessage('Check-in dipilih.'),
+            onCheckIn: _openCaptureResult,
             onCheckOut: () => _showLocationMessage('Check-out dipilih.'),
           ),
         ),
@@ -187,6 +188,15 @@ class _MapScreenState extends State<MapScreen>
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _openCaptureResult() {
+    setState(() => _flagMenuExpanded = false);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => const CaptureResultScreen(),
+      ),
+    );
   }
 
   void _animateMapTo(LatLng center, double zoom) {
