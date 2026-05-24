@@ -3,12 +3,20 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 class UploadedImageFullscreenPage extends StatelessWidget {
-  const UploadedImageFullscreenPage({super.key, required this.imagePath});
+  const UploadedImageFullscreenPage({super.key, required this.imagePath})
+    : assetPath = null;
 
-  final String imagePath;
+  const UploadedImageFullscreenPage.asset({super.key, required this.assetPath})
+    : imagePath = null;
+
+  final String? imagePath;
+  final String? assetPath;
 
   @override
   Widget build(BuildContext context) {
+    final localImagePath = imagePath;
+    final localAssetPath = assetPath;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -18,17 +26,19 @@ class UploadedImageFullscreenPage extends StatelessWidget {
               minScale: 1,
               maxScale: 5,
               child: Center(
-                child: Image.file(
-                  File(imagePath),
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Icon(
-                      Icons.broken_image_outlined,
-                      color: Colors.white70,
-                      size: 54,
-                    );
-                  },
-                ),
+                child: localAssetPath == null
+                    ? Image.file(
+                        File(localImagePath!),
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.broken_image_outlined,
+                            color: Colors.white70,
+                            size: 54,
+                          );
+                        },
+                      )
+                    : Image.asset(localAssetPath, fit: BoxFit.contain),
               ),
             ),
           ),

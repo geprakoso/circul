@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../core/constants.dart';
+import '../image_viewer/uploaded_image_fullscreen_page.dart';
 
 const _capturePreviewAsset = 'assets/images/check_in_capture_preview.png';
 
@@ -97,6 +98,15 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
       if (!mounted) return;
       _showPlaceholderMessage('Kamera belum bisa dibuka.');
     }
+  }
+
+  Future<void> _handleHeaderBack() async {
+    if (widget.useDummyCapture && Platform.isMacOS) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    await _retakePhoto();
   }
 
   Future<void> _loadCurrentLocation() async {
@@ -270,19 +280,19 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
         bottom: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final previewWidth = constraints.maxWidth - 36;
+            final previewWidth = constraints.maxWidth - 32;
             final naturalPreviewHeight = previewWidth / (781 / 676);
-            final maxPreviewHeight = constraints.maxHeight * .42;
+            final maxPreviewHeight = constraints.maxHeight * .36;
             final previewHeight = naturalPreviewHeight > maxPreviewHeight
                 ? maxPreviewHeight
                 : naturalPreviewHeight;
 
             return Column(
               children: [
-                _CaptureHeader(onClose: () => Navigator.of(context).pop()),
-                const SizedBox(height: 24),
+                _CaptureHeader(onBack: _handleHeaderBack),
+                const SizedBox(height: 14),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: SizedBox(
                     height: previewHeight,
                     width: double.infinity,
@@ -295,7 +305,7 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 14),
                 Expanded(
                   child: _ConditionPanel(
                     selectedChoice: _selectedChoice,
@@ -314,64 +324,34 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
 }
 
 class _CaptureHeader extends StatelessWidget {
-  const _CaptureHeader({required this.onClose});
+  const _CaptureHeader({required this.onBack});
 
-  final VoidCallback onClose;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 78,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            left: 22,
-            child: _HeaderIconButton(
-              icon: Icons.close_rounded,
-              label: 'Tutup',
-              onPressed: onClose,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 6, 16, 4),
+      child: SizedBox(
+        height: 46,
+        child: Row(
+          children: [
+            _HeaderIconButton(
+              icon: Icons.arrow_back_rounded,
+              label: 'Kembali',
+              onPressed: onBack,
             ),
-          ),
-          const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Capture Result',
-                style: TextStyle(
-                  color: kInk,
-                  fontSize: 21,
-                  fontWeight: FontWeight.w900,
-                ),
+            const SizedBox(width: 6),
+            const Text(
+              'Capture Result',
+              style: TextStyle(
+                color: kInk,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
               ),
-              SizedBox(height: 7),
-              Text(
-                'Step 2 of 3',
-                style: TextStyle(
-                  color: Color(0xFF4B5563),
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          Positioned(
-            right: 22,
-            child: _HeaderIconButton(
-              icon: Icons.info_outline_rounded,
-              label: 'Info',
-              onPressed: () {
-                ScaffoldMessenger.of(context)
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    const SnackBar(
-                      content: Text('Bantu kami menilai kondisi lingkungan.'),
-                    ),
-                  );
-              },
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -395,8 +375,12 @@ class _HeaderIconButton extends StatelessWidget {
       label: label,
       child: InkResponse(
         onTap: onPressed,
-        radius: 30,
-        child: Icon(icon, color: const Color(0xFF116A3A), size: 33),
+        radius: 24,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(icon, color: const Color(0xFF116A3A), size: 25),
+        ),
       ),
     );
   }
@@ -421,51 +405,70 @@ class _CapturePreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final capturedPath = imagePath;
     final hasCapture = capturedPath != null || useDummyCapture;
+    void openPreviewImage() {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => capturedPath == null
+              ? const UploadedImageFullscreenPage.asset(
+                  assetPath: _capturePreviewAsset,
+                )
+              : UploadedImageFullscreenPage(imagePath: capturedPath),
+        ),
+      );
+    }
+
     return Stack(
       children: [
         Positioned.fill(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: capturedPath == null
-                ? Image.asset(_capturePreviewAsset, fit: BoxFit.cover)
-                : Image.file(
-                    File(capturedPath),
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Image.asset(
-                        _capturePreviewAsset,
+          child: Semantics(
+            button: true,
+            label: 'Buka gambar capture',
+            child: GestureDetector(
+              onTap: openPreviewImage,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: capturedPath == null
+                    ? Image.asset(_capturePreviewAsset, fit: BoxFit.cover)
+                    : Image.file(
+                        File(capturedPath),
                         fit: BoxFit.cover,
-                      );
-                    },
-                  ),
+                        errorBuilder: (context, error, stackTrace) {
+                          return Image.asset(
+                            _capturePreviewAsset,
+                            fit: BoxFit.cover,
+                          );
+                        },
+                      ),
+              ),
+            ),
           ),
         ),
         if (hasCapture) ...[
-          const Positioned(left: 16, top: 14, child: _CapturedBadge()),
+          const Positioned(left: 12, top: 12, child: _CapturedBadge()),
           Positioned(
-            left: 16,
-            bottom: 14,
+            left: 12,
+            bottom: 12,
             child: _CaptureMetaCard(
               locationText: locationText,
               capturedTimeText: capturedTimeText,
             ),
           ),
           Positioned(
-            right: 18,
-            bottom: 14,
+            right: 12,
+            bottom: 12,
             child: _RetakeButton(onTap: onRetake),
           ),
         ] else
           Positioned(
-            right: 18,
-            bottom: 14,
+            right: 12,
+            bottom: 12,
             child: Semantics(
               button: true,
               label: 'Retake',
               child: InkResponse(
                 onTap: onRetake,
-                radius: 42,
-                child: const SizedBox(width: 74, height: 74),
+                radius: 32,
+                child: const SizedBox(width: 56, height: 56),
               ),
             ),
           ),
@@ -480,21 +483,21 @@ class _CapturedBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(8, 7, 13, 7),
+      padding: const EdgeInsets.fromLTRB(7, 5, 10, 5),
       decoration: BoxDecoration(
         color: const Color(0xE13B9658),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle_rounded, color: Colors.white, size: 22),
-          SizedBox(width: 7),
+          Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+          SizedBox(width: 5),
           Text(
             'Captured',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 17,
+              fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -516,16 +519,16 @@ class _CaptureMetaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(15),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        width: 210,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        width: 184,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(color: Colors.black.withValues(alpha: .38)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             _MetaRow(icon: Icons.location_on_outlined, text: locationText),
-            const SizedBox(height: 11),
+            const SizedBox(height: 8),
             _MetaRow(icon: Icons.schedule_rounded, text: capturedTimeText),
           ],
         ),
@@ -544,8 +547,8 @@ class _MetaRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: Colors.white, size: 22),
-        const SizedBox(width: 12),
+        Icon(icon, color: Colors.white, size: 17),
+        const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
@@ -553,7 +556,7 @@ class _MetaRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 15,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -576,24 +579,24 @@ class _RetakeButton extends StatelessWidget {
       child: Material(
         color: Colors.white,
         shape: const CircleBorder(),
-        elevation: 7,
-        shadowColor: const Color(0x33000000),
+        elevation: 4,
+        shadowColor: const Color(0x26000000),
         child: InkWell(
           onTap: onTap,
           customBorder: const CircleBorder(),
           child: const SizedBox(
-            width: 74,
-            height: 74,
+            width: 56,
+            height: 56,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.refresh_rounded, color: Color(0xFF23824D), size: 31),
-                SizedBox(height: 2),
+                Icon(Icons.refresh_rounded, color: Color(0xFF23824D), size: 23),
+                SizedBox(height: 1),
                 Text(
                   'Retake',
                   style: TextStyle(
                     color: Color(0xFF23824D),
-                    fontSize: 13,
+                    fontSize: 10.5,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -623,57 +626,57 @@ class _ConditionPanel extends StatelessWidget {
       width: double.infinity,
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
         boxShadow: [
           BoxShadow(
             color: Color(0x14000000),
-            blurRadius: 28,
-            offset: Offset(0, -10),
+            blurRadius: 18,
+            offset: Offset(0, -6),
           ),
         ],
       ),
       child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
-          24,
-          14,
-          24,
-          22 + MediaQuery.paddingOf(context).bottom,
+          18,
+          10,
+          18,
+          16 + MediaQuery.paddingOf(context).bottom,
         ),
         child: Column(
           children: [
             Container(
-              width: 37,
-              height: 5,
+              width: 32,
+              height: 4,
               decoration: BoxDecoration(
                 color: const Color(0xFFD1D5DB),
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
             const _LeafBadge(),
-            const SizedBox(height: 15),
+            const SizedBox(height: 10),
             const Text(
               'Is the environment\nup or down?',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF083E23),
-                fontSize: 27,
-                height: 1.14,
+                fontSize: 22,
+                height: 1.12,
                 fontWeight: FontWeight.w900,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
             const Text(
               'Your answer helps us understand\nthe condition of our environment.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF4B5563),
-                fontSize: 17,
+                fontSize: 14,
                 height: 1.38,
                 fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 25),
+            const SizedBox(height: 18),
             Row(
               children: [
                 Expanded(
@@ -683,7 +686,7 @@ class _ConditionPanel extends StatelessWidget {
                     onTap: () => onChoiceSelected(_ConditionChoice.up),
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _ConditionCard(
                     choice: _ConditionChoice.down,
@@ -693,7 +696,7 @@ class _ConditionPanel extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 25),
+            const SizedBox(height: 18),
             _ExamplesButton(onTap: onExamplesTap),
           ],
         ),
@@ -708,13 +711,13 @@ class _LeafBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 56,
-      height: 56,
+      width: 44,
+      height: 44,
       decoration: const BoxDecoration(
         color: Color(0xFFE7F3EA),
         shape: BoxShape.circle,
       ),
-      child: const Icon(Icons.eco_outlined, color: Color(0xFF23824D), size: 33),
+      child: const Icon(Icons.eco_outlined, color: Color(0xFF23824D), size: 26),
     );
   }
 }
@@ -750,22 +753,22 @@ class _ConditionCard extends StatelessWidget {
       label: title,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          height: 141,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 17),
+          height: 112,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           decoration: BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: borderColor, width: selected ? 2 : 1),
             boxShadow: selected
                 ? [
                     BoxShadow(
                       color: color.withValues(alpha: .12),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
                     ),
                   ]
                 : null,
@@ -775,22 +778,22 @@ class _ConditionCard extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: color, size: 57),
-                const SizedBox(height: 15),
+                Icon(icon, color: color, size: 40),
+                const SizedBox(height: 9),
                 Text(
                   title,
                   style: TextStyle(
                     color: color,
-                    fontSize: 25,
+                    fontSize: 19,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 3),
                 Text(
                   subtitle,
                   style: const TextStyle(
                     color: Color(0xFF4B5563),
-                    fontSize: 16,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -812,28 +815,28 @@ class _ExamplesButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: const Color(0xFFF9FAFA),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
-          height: 57,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(14),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x0C000000),
-                blurRadius: 18,
-                offset: Offset(0, 7),
+                blurRadius: 12,
+                offset: Offset(0, 4),
               ),
             ],
           ),
           child: Row(
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
                   color: const Color(0xFFE7F3EA),
                   shape: BoxShape.circle,
@@ -842,17 +845,17 @@ class _ExamplesButton extends StatelessWidget {
                 child: const Icon(
                   Icons.help_outline_rounded,
                   color: Color(0xFF23824D),
-                  size: 24,
+                  size: 19,
                 ),
               ),
-              const SizedBox(width: 15),
+              const SizedBox(width: 10),
               const Expanded(
                 child: Text.rich(
                   TextSpan(
                     text: 'Not sure? ',
                     style: TextStyle(
                       color: kInk,
-                      fontSize: 17,
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
                     children: [
@@ -867,7 +870,7 @@ class _ExamplesButton extends StatelessWidget {
               const Icon(
                 Icons.chevron_right_rounded,
                 color: Color(0xFF27313C),
-                size: 33,
+                size: 24,
               ),
             ],
           ),
