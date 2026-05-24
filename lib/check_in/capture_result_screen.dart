@@ -8,9 +8,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../core/constants.dart';
+import '../feed_post_repository.dart';
 import '../image_viewer/uploaded_image_fullscreen_page.dart';
+import '../new_post/new_post_screen.dart';
 
 const _capturePreviewAsset = 'assets/images/check_in_capture_preview.png';
+const _fallbackCheckInPoint = LatLng(-7.5584, 110.8199);
 
 class CaptureResultScreen extends StatefulWidget {
   const CaptureResultScreen({
@@ -18,12 +21,14 @@ class CaptureResultScreen extends StatefulWidget {
     this.imagePath,
     this.onDownSelected,
     this.useDummyCapture = false,
+    this.feedPostRepository,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
 
   final String? imagePath;
   final ValueChanged<LatLng>? onDownSelected;
   final bool useDummyCapture;
+  final FeedPostRepository? feedPostRepository;
   final ImagePicker? _imagePicker;
 
   @override
@@ -58,7 +63,7 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
   void _selectChoice(_ConditionChoice choice) {
     setState(() => _selectedChoice = choice);
     if (choice == _ConditionChoice.down) {
-      _addDownHeatmapLevel();
+      _openDownPostComposer();
     }
   }
 
@@ -150,7 +155,7 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
     }
   }
 
-  Future<void> _addDownHeatmapLevel() async {
+  Future<void> _openDownPostComposer() async {
     var point = _capturedPoint;
     if (point == null) {
       setState(() => _locationText = 'Getting location...');
@@ -164,13 +169,58 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
       });
     }
 
-    if (point == null) {
-      _showPlaceholderMessage('Lokasi belum tersedia untuk heatmap.');
-      return;
+    final selectedPoint = point ?? _fallbackCheckInPoint;
+
+    widget.onDownSelected?.call(selectedPoint);
+    final imagePath = await _captureImagePathForPost();
+    if (!mounted) return;
+
+    final didPost = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (context) => NewPostScreen(
+          feedPostRepository: widget.feedPostRepository,
+          initialBody: _initialPostBody(selectedPoint),
+          initialTopic: 'Check-in Lingkungan',
+          initialImagePaths: imagePath == null ? const [] : [imagePath],
+          initialLocationCheckInEnabled: true,
+          initialLocationLabel: _locationLabelForPost(selectedPoint),
+          initialCoordinateLabel: _coordinateLabel(selectedPoint),
+        ),
+      ),
+    );
+
+    if (!mounted || didPost != true) return;
+    Navigator.of(context).pop(true);
+  }
+
+  Future<String?> _captureImagePathForPost() async {
+    final capturedPath = _imagePath;
+    if (capturedPath != null) return capturedPath;
+    if (!widget.useDummyCapture) return null;
+
+    final bytes = await rootBundle.load(_capturePreviewAsset);
+    final file = File(
+      '${Directory.systemTemp.path}/circul_dummy_check_in_${DateTime.now().millisecondsSinceEpoch}.png',
+    );
+    await file.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
+    return file.path;
+  }
+
+  String _initialPostBody(LatLng point) {
+    return 'Saya telah check-in di ${_locationLabelForPost(point)}.';
+  }
+
+  String _locationLabelForPost(LatLng point) {
+    final location = _locationText.trim();
+    if (location.isEmpty || location == 'Location unavailable') {
+      return _coordinateLabel(point);
     }
 
-    widget.onDownSelected?.call(point);
-    if (mounted) Navigator.of(context).pop();
+    return location;
+  }
+
+  String _coordinateLabel(LatLng point) {
+    return '${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}';
   }
 
   Future<String> _getPlaceLabel(Position position) async {

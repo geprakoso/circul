@@ -18,11 +18,13 @@ class HomeScreen extends StatefulWidget {
     super.key,
     this.feedPostRepository,
     this.onDownCheckIn,
+    this.refreshToken = 0,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
 
   final FeedPostRepository? feedPostRepository;
   final ValueChanged<LatLng>? onDownCheckIn;
+  final int refreshToken;
   final ImagePicker? _imagePicker;
 
   @override
@@ -40,6 +42,14 @@ class _HomeScreenState extends State<HomeScreen> {
     _repository = widget.feedPostRepository ?? FeedPostRepository();
     _postsFuture = _repository.getPosts();
     _imagePicker = widget._imagePicker ?? ImagePicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) {
+      _postsFuture = _repository.getPosts();
+    }
   }
 
   Future<void> _openComposer() async {
@@ -64,16 +74,28 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _refreshPostsAfterCheckInPost() {
+    setState(() {
+      _postsFuture = _repository.getPosts();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Check-in tersimpan sebagai postingan.')),
+    );
+  }
+
   Future<void> _openCheckInCamera() async {
     if (Platform.isMacOS) {
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+      final didPost = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
           builder: (context) => CaptureResultScreen(
             useDummyCapture: true,
+            feedPostRepository: _repository,
             onDownSelected: widget.onDownCheckIn,
           ),
         ),
       );
+      if (!mounted || didPost != true) return;
+      _refreshPostsAfterCheckInPost();
       return;
     }
 
@@ -85,14 +107,17 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (!mounted || image == null) return;
 
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+      final didPost = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
           builder: (context) => CaptureResultScreen(
             imagePath: image.path,
+            feedPostRepository: _repository,
             onDownSelected: widget.onDownCheckIn,
           ),
         ),
       );
+      if (!mounted || didPost != true) return;
+      _refreshPostsAfterCheckInPost();
     } on PlatformException catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)

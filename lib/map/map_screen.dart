@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../check_in/capture_result_screen.dart';
 import '../core/constants.dart';
+import '../feed_post_repository.dart';
 
 const _gondangManisCenter = LatLng(-7.5584, 110.8199);
 const _osmTileTemplate = String.fromEnvironment(
@@ -21,10 +22,14 @@ class MapScreen extends StatefulWidget {
     super.key,
     this.issueClusters = const [],
     this.onDownCheckIn,
+    this.feedPostRepository,
+    this.onPostCreated,
   });
 
   final List<MapIssueCluster> issueClusters;
   final ValueChanged<LatLng>? onDownCheckIn;
+  final FeedPostRepository? feedPostRepository;
+  final VoidCallback? onPostCreated;
 
   static double distanceMeters(LatLng first, LatLng second) {
     return const Distance().as(LengthUnit.Meter, first, second);
@@ -41,6 +46,7 @@ class _MapScreenState extends State<MapScreen>
   var _currentLocation = _gondangManisCenter;
   var _isLocating = false;
   var _flagMenuExpanded = false;
+  LatLngBounds? _visibleBounds;
 
   @override
   void initState() {
@@ -60,11 +66,13 @@ class _MapScreenState extends State<MapScreen>
 
   @override
   Widget build(BuildContext context) {
+    final visibleCheckIns = _visibleCheckIns();
+
     return Stack(
       children: [
         FlutterMap(
           mapController: _mapController,
-          options: const MapOptions(
+          options: MapOptions(
             initialCenter: _gondangManisCenter,
             initialZoom: 16,
             minZoom: 12,
@@ -72,6 +80,9 @@ class _MapScreenState extends State<MapScreen>
             interactionOptions: InteractionOptions(
               flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
             ),
+            onMapReady: _syncVisibleBounds,
+            onPositionChanged: (camera, hasGesture) =>
+                _syncVisibleBounds(camera),
           ),
           children: [
             TileLayer(
@@ -115,7 +126,7 @@ class _MapScreenState extends State<MapScreen>
         ),
         Positioned(
           right: 16,
-          bottom: 18,
+          bottom: 192,
           child: _LocateButton(
             isLoading: _isLocating,
             onPressed: _centerToCurrentLocation,
@@ -123,7 +134,7 @@ class _MapScreenState extends State<MapScreen>
         ),
         Positioned(
           right: 16,
-          bottom: 78,
+          bottom: 252,
           child: _FlagActionMenu(
             expanded: _flagMenuExpanded,
             onToggle: () =>
@@ -132,8 +143,46 @@ class _MapScreenState extends State<MapScreen>
             onCheckOut: () => _showLocationMessage('Check-out dipilih.'),
           ),
         ),
+        _CheckInBottomSheet(
+          items: visibleCheckIns,
+          onItemTap: (item) => _animateMapTo(item.point, 17),
+        ),
       ],
     );
+  }
+
+  void _syncVisibleBounds([MapCamera? camera]) {
+    final nextBounds =
+        camera?.visibleBounds ?? _mapController.camera.visibleBounds;
+    if (!mounted) return;
+    setState(() => _visibleBounds = nextBounds);
+  }
+
+  List<_VisibleCheckIn> _visibleCheckIns() {
+    final bounds = _visibleBounds;
+    final items = <_VisibleCheckIn>[
+      for (var i = 0; i < widget.issueClusters.length; i++)
+        _VisibleCheckIn.fromCluster(
+          cluster: widget.issueClusters[i],
+          index: i,
+          currentLocation: _currentLocation,
+        ),
+      for (var i = 0; i < _impactSpots.length; i++)
+        _VisibleCheckIn.fromImpactSpot(
+          spot: _impactSpots[i],
+          index: i,
+          currentLocation: _currentLocation,
+        ),
+    ];
+
+    final visibleItems = bounds == null
+        ? items
+        : items.where((item) => bounds.contains(item.point)).toList();
+
+    visibleItems.sort(
+      (first, second) => first.distanceMeters.compareTo(second.distanceMeters),
+    );
+    return visibleItems;
   }
 
   Future<void> _centerToCurrentLocation() async {
@@ -208,14 +257,17 @@ class _MapScreenState extends State<MapScreen>
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _openCaptureResult() {
+  Future<void> _openCaptureResult() async {
     setState(() => _flagMenuExpanded = false);
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) =>
-            CaptureResultScreen(onDownSelected: widget.onDownCheckIn),
+    final didPost = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (context) => CaptureResultScreen(
+          feedPostRepository: widget.feedPostRepository,
+          onDownSelected: widget.onDownCheckIn,
+        ),
       ),
     );
+    if (didPost == true) widget.onPostCreated?.call();
   }
 
   void _animateMapTo(LatLng center, double zoom) {
@@ -266,6 +318,71 @@ class MapIssueCluster {
       radiusMeters: radiusMeters ?? this.radiusMeters,
     );
   }
+}
+
+class _VisibleCheckIn {
+  const _VisibleCheckIn({
+    required this.point,
+    required this.title,
+    required this.subtitle,
+    required this.meta,
+    required this.color,
+    required this.icon,
+    required this.distanceMeters,
+  });
+
+  factory _VisibleCheckIn.fromCluster({
+    required MapIssueCluster cluster,
+    required int index,
+    required LatLng currentLocation,
+  }) {
+    final distanceMeters = MapScreen.distanceMeters(
+      currentLocation,
+      cluster.point,
+    );
+
+    return _VisibleCheckIn(
+      point: cluster.point,
+      title: cluster.count == 1
+          ? 'Check-in lingkungan turun'
+          : '${cluster.count} check-in lingkungan turun',
+      subtitle: 'Butuh perhatian komunitas',
+      meta: _distanceLabel(distanceMeters),
+      color: _clusterColorForCount(cluster.count),
+      icon: Icons.flag_rounded,
+      distanceMeters: distanceMeters,
+    );
+  }
+
+  factory _VisibleCheckIn.fromImpactSpot({
+    required _ImpactSpot spot,
+    required int index,
+    required LatLng currentLocation,
+  }) {
+    final distanceMeters = MapScreen.distanceMeters(
+      currentLocation,
+      spot.point,
+    );
+    final intensityPercent = (spot.intensity * 100).round();
+
+    return _VisibleCheckIn(
+      point: spot.point,
+      title: 'Titik check-in #${index + 1}',
+      subtitle: 'Aktivitas terdeteksi di area map',
+      meta: '${_distanceLabel(distanceMeters)} • $intensityPercent%',
+      color: _heatmapColorForIntensity(spot.intensity),
+      icon: Icons.place_rounded,
+      distanceMeters: distanceMeters,
+    );
+  }
+
+  final LatLng point;
+  final String title;
+  final String subtitle;
+  final String meta;
+  final Color color;
+  final IconData icon;
+  final double distanceMeters;
 }
 
 class _LatLngTween extends Tween<LatLng> {
@@ -480,6 +597,221 @@ class _FlagMenuAction extends StatelessWidget {
   }
 }
 
+class _CheckInBottomSheet extends StatelessWidget {
+  const _CheckInBottomSheet({required this.items, required this.onItemTap});
+
+  final List<_VisibleCheckIn> items;
+  final ValueChanged<_VisibleCheckIn> onItemTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: .22,
+      minChildSize: .15,
+      maxChildSize: .56,
+      snap: true,
+      snapSizes: const [.22, .56],
+      builder: (context, scrollController) {
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x24000000),
+                blurRadius: 18,
+                offset: Offset(0, -4),
+              ),
+            ],
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(18, 9, 18, 18),
+            children: [
+              Center(
+                child: Container(
+                  width: 34,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD1D5DB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Check-in nearby',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: kInk,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          items.isEmpty
+                              ? 'Tidak ada titik di area layar'
+                              : '${items.length} titik terlihat di area layar',
+                          style: const TextStyle(
+                            color: kMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: kSoftGreen,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${items.length}',
+                      style: const TextStyle(
+                        color: kCirculGreen,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Divider(height: 1, color: kLine),
+              if (items.isEmpty)
+                const _EmptyCheckInResult()
+              else
+                for (final item in items)
+                  _CheckInResultTile(item: item, onTap: () => onItemTap(item)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _EmptyCheckInResult extends StatelessWidget {
+  const _EmptyCheckInResult();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 22),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF3F4F6),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.search_off_rounded,
+              color: kMuted,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Geser atau zoom map untuk menemukan titik check-in lain.',
+              style: TextStyle(
+                color: kMuted,
+                fontSize: 13,
+                height: 1.35,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckInResultTile extends StatelessWidget {
+  const _CheckInResultTile({required this.item, required this.onTap});
+
+  final _VisibleCheckIn item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: item.color.withValues(alpha: .12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(item.icon, color: item.color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: kInk,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    item.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: kMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              item.meta,
+              style: const TextStyle(
+                color: kMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 List<CircleMarker> _clusterGlows(List<MapIssueCluster> issueClusters) {
   return [
     for (final spot in _impactSpots) ...[
@@ -539,6 +871,11 @@ Color _clusterColorForCount(int count) {
   if (count <= 2) return const Color(0xFF22C55E);
   if (count <= 5) return const Color(0xFFF59E0B);
   return const Color(0xFFEF4444);
+}
+
+String _distanceLabel(double distanceMeters) {
+  if (distanceMeters < 1000) return '${distanceMeters.round()} m';
+  return '${(distanceMeters / 1000).toStringAsFixed(1)} km';
 }
 
 double _clusterGlowRadiusForCount(int count) {

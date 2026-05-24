@@ -27,17 +27,19 @@ class FeedPostRepository {
     required String body,
     required String topic,
     required bool allowReplies,
+    String? city,
     List<String> imagePaths = const [],
   }) async {
     final db = await _database.database;
     final now = DateTime.now().millisecondsSinceEpoch;
     final cleanBody = body.trim();
     final cleanTopic = topic.trim();
+    final cleanCity = city?.trim();
 
     await db.insert(CirculDatabase.feedPostsTable, {
       'id': 'local_$now',
       'author': 'sarahmae',
-      'city': 'Solo',
+      'city': cleanCity?.isNotEmpty == true ? cleanCity! : 'Solo',
       'time_ago': 'Baru saja',
       'title': cleanTopic.isEmpty ? 'Update komunitas' : cleanTopic,
       'body': cleanBody,

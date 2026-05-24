@@ -97,13 +97,14 @@ class _FakeFeedPostRepository extends FeedPostRepository {
     required String body,
     required String topic,
     required bool allowReplies,
+    String? city,
     List<String> imagePaths = const [],
   }) async {
     _posts.insert(
       0,
       FeedPost(
         author: 'sarahmae',
-        city: 'Solo',
+        city: city ?? 'Solo',
         timeAgo: 'Baru saja',
         title: topic.isEmpty ? 'Update komunitas' : topic,
         body: body,

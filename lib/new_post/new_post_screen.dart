@@ -11,9 +11,24 @@ import 'widgets/compose_tools.dart';
 import 'widgets/topic_autocomplete.dart';
 
 class NewPostScreen extends StatefulWidget {
-  const NewPostScreen({super.key, this.feedPostRepository});
+  const NewPostScreen({
+    super.key,
+    this.feedPostRepository,
+    this.initialBody = '',
+    this.initialTopic = '',
+    this.initialImagePaths = const [],
+    this.initialLocationCheckInEnabled = false,
+    this.initialLocationLabel,
+    this.initialCoordinateLabel,
+  });
 
   final FeedPostRepository? feedPostRepository;
+  final String initialBody;
+  final String initialTopic;
+  final List<String> initialImagePaths;
+  final bool initialLocationCheckInEnabled;
+  final String? initialLocationLabel;
+  final String? initialCoordinateLabel;
 
   @override
   State<NewPostScreen> createState() => _NewPostScreenState();
@@ -31,6 +46,8 @@ class _NewPostScreenState extends State<NewPostScreen> {
   var _locationCheckInEnabled = false;
   var _isSubmitting = false;
   final _selectedImagePaths = <String>[];
+  late final String? _locationLabel;
+  late final String? _coordinateLabel;
 
   bool get _canPost => !_isSubmitting && _controller.text.trim().isNotEmpty;
 
@@ -38,6 +55,12 @@ class _NewPostScreenState extends State<NewPostScreen> {
   void initState() {
     super.initState();
     _repository = widget.feedPostRepository ?? FeedPostRepository();
+    _controller.text = widget.initialBody;
+    _selectedTopic = widget.initialTopic;
+    _locationCheckInEnabled = widget.initialLocationCheckInEnabled;
+    _selectedImagePaths.addAll(widget.initialImagePaths);
+    _locationLabel = widget.initialLocationLabel;
+    _coordinateLabel = widget.initialCoordinateLabel;
     _controller.addListener(() => setState(() {}));
   }
 
@@ -56,6 +79,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
         body: _controller.text,
         topic: _selectedTopic,
         allowReplies: _allowReplies,
+        city: _locationLabel,
         imagePaths: List<String>.of(_selectedImagePaths),
       );
       if (!mounted) return;
@@ -198,6 +222,8 @@ class _NewPostScreenState extends State<NewPostScreen> {
                                 const SizedBox(height: 12),
                                 AttachmentMediaStrip(
                                   locationEnabled: _locationCheckInEnabled,
+                                  locationLabel: _locationLabel,
+                                  coordinateLabel: _coordinateLabel,
                                   imagePaths: _selectedImagePaths,
                                   onRemoveImage: _removeSelectedImage,
                                 ),

@@ -15,11 +15,15 @@ class AttachmentMediaStrip extends StatelessWidget {
     required this.locationEnabled,
     required this.imagePaths,
     required this.onRemoveImage,
+    this.locationLabel,
+    this.coordinateLabel,
   });
 
   final bool locationEnabled;
   final List<String> imagePaths;
   final ValueChanged<String> onRemoveImage;
+  final String? locationLabel;
+  final String? coordinateLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +37,8 @@ class AttachmentMediaStrip extends StatelessWidget {
           return LocationPlaceholderBox(
             enabled: locationEnabled,
             width: cardWidth,
+            label: locationLabel,
+            coordinateLabel: coordinateLabel,
           );
         }
 
@@ -46,6 +52,8 @@ class AttachmentMediaStrip extends StatelessWidget {
                 LocationPlaceholderBox(
                   enabled: locationEnabled,
                   width: cardWidth,
+                  label: locationLabel,
+                  coordinateLabel: coordinateLabel,
                 ),
                 const SizedBox(width: 10),
                 for (final path in imagePaths) ...[
@@ -149,10 +157,14 @@ class LocationPlaceholderBox extends StatelessWidget {
     super.key,
     required this.enabled,
     required this.width,
+    this.label,
+    this.coordinateLabel,
   });
 
   final bool enabled;
   final double width;
+  final String? label;
+  final String? coordinateLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -214,6 +226,7 @@ class LocationPlaceholderBox extends StatelessWidget {
                 right: 10,
                 bottom: 10,
                 child: Container(
+                  constraints: BoxConstraints(maxWidth: width - 20),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 6,
@@ -223,13 +236,10 @@ class LocationPlaceholderBox extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFF303438)),
                   ),
-                  child: Text(
-                    enabled ? 'Map placeholder' : 'Tap bendera',
-                    style: const TextStyle(
-                      color: Color(0xFFB8BBBF),
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  child: _LocationCaption(
+                    enabled: enabled,
+                    label: label,
+                    coordinateLabel: coordinateLabel,
                   ),
                 ),
               ),
@@ -237,6 +247,67 @@ class LocationPlaceholderBox extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _LocationCaption extends StatelessWidget {
+  const _LocationCaption({
+    required this.enabled,
+    this.label,
+    this.coordinateLabel,
+  });
+
+  final bool enabled;
+  final String? label;
+  final String? coordinateLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) {
+      return const Text(
+        'Tap bendera',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: Color(0xFFB8BBBF),
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+
+    final cleanLabel = label?.trim();
+    final cleanCoordinate = coordinateLabel?.trim();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          cleanLabel?.isNotEmpty == true ? cleanLabel! : 'Location active',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        if (cleanCoordinate?.isNotEmpty == true) ...[
+          const SizedBox(height: 2),
+          Text(
+            cleanCoordinate!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFFB8BBBF),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

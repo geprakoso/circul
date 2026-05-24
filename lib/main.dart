@@ -54,9 +54,10 @@ class CirculShell extends StatefulWidget {
 
 class _CirculShellState extends State<CirculShell> {
   var _index = 0;
+  var _homeRefreshToken = 0;
   final _issueClusters = <MapIssueCluster>[];
 
-  void _addHeatmapLevel(LatLng point) {
+  void _recordHeatmapLevel(LatLng point, {required bool showMap}) {
     setState(() {
       final clusterIndex = _issueClusters.indexWhere(
         (cluster) => MapScreen.distanceMeters(cluster.point, point) <= 75,
@@ -78,8 +79,20 @@ class _CirculShellState extends State<CirculShell> {
         );
       }
 
-      _index = 1;
+      if (showMap) _index = 1;
     });
+  }
+
+  void _addHeatmapLevel(LatLng point) {
+    _recordHeatmapLevel(point, showMap: true);
+  }
+
+  void _addHomeCheckInHeatmapLevel(LatLng point) {
+    _recordHeatmapLevel(point, showMap: false);
+  }
+
+  void _refreshHomePosts() {
+    setState(() => _homeRefreshToken++);
   }
 
   @override
@@ -87,9 +100,15 @@ class _CirculShellState extends State<CirculShell> {
     final screens = [
       HomeScreen(
         feedPostRepository: widget.feedPostRepository,
-        onDownCheckIn: _addHeatmapLevel,
+        onDownCheckIn: _addHomeCheckInHeatmapLevel,
+        refreshToken: _homeRefreshToken,
       ),
-      MapScreen(issueClusters: _issueClusters, onDownCheckIn: _addHeatmapLevel),
+      MapScreen(
+        issueClusters: _issueClusters,
+        feedPostRepository: widget.feedPostRepository,
+        onDownCheckIn: _addHeatmapLevel,
+        onPostCreated: _refreshHomePosts,
+      ),
       const SearchScreen(),
       const EventScreen(),
       const ProfileScreen(),
