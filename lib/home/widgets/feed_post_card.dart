@@ -33,8 +33,8 @@ class FeedPostCard extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SarahAvatar(radius: compact ? 22 : 28),
-            const SizedBox(width: 14),
+            SarahAvatar(radius: compact ? 20 : 24),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,63 +45,66 @@ class FeedPostCard extends StatelessWidget {
                         child: Text(
                           compact ? 'Sarah Mae' : post.author,
                           style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
+                              ?.copyWith(
+                                fontSize: compact ? 15 : 16,
+                                fontWeight: FontWeight.w800,
+                              ),
                         ),
                       ),
                       if (!compact && post.topic.isNotEmpty) ...[
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         _Pill(text: post.topic),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 8),
                         const _Dot(),
                       ],
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Text(
                         compact ? post.timeAgo : post.timeAgo,
                         style: Theme.of(
                           context,
-                        ).textTheme.bodyMedium?.copyWith(color: kMuted),
+                        ).textTheme.bodySmall?.copyWith(color: kMuted),
                       ),
                     ],
                   ),
                   if (showTitle) ...[
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 10),
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: 16,
                         fontWeight: FontWeight.w800,
                         height: 1.35,
                       ),
                     ),
                   ],
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Text(
                     post.body,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      height: 1.45,
-                      color: kInk,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyLarge?.copyWith(height: 1.45, color: kInk),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   _PostImageMedia(
                     post: post,
                     compact: compact,
                     onTap: onOpenComments,
                   ),
                   if (!compact) ...[
-                    const SizedBox(height: 18),
-                    Row(
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         _ActionButton(
                           icon: Icons.favorite_border_rounded,
                           text: '${post.likes}',
                         ),
-                        const SizedBox(width: 12),
                         _ActionButton(
                           icon: Icons.chat_bubble_outline_rounded,
                           text: '${post.comments}',
                           onTap: onOpenComments,
                         ),
-                        const SizedBox(width: 12),
                         const _ActionButton(
                           icon: Icons.reply_rounded,
                           text: 'Bagikan',
@@ -115,7 +118,10 @@ class FeedPostCard extends StatelessWidget {
             IconButton(
               tooltip: 'Lainnya',
               onPressed: () {},
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               icon: const Icon(Icons.more_horiz_rounded),
+              iconSize: 22,
             ),
           ],
         ),
@@ -132,21 +138,21 @@ class FeedPostCard extends StatelessWidget {
     if (!framed) {
       return Padding(
         padding: EdgeInsets.fromLTRB(
-          24,
-          compact ? 16 : 28,
-          18,
-          compact ? 10 : 28,
+          20,
+          compact ? 14 : 22,
+          16,
+          compact ? 8 : 22,
         ),
         child: tappableContent,
       );
     }
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-      padding: const EdgeInsets.fromLTRB(20, 20, 8, 20),
+      margin: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: kLine),
       ),
       child: tappableContent,
@@ -172,11 +178,11 @@ class _PostImageMedia extends StatelessWidget {
     if (imagePaths.isEmpty) {
       if (post.imageAsset.isEmpty) return const SizedBox.shrink();
       return ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         child: Image.asset(
           post.imageAsset,
           width: double.infinity,
-          height: compact ? 190 : 230,
+          height: compact ? 170 : 200,
           fit: BoxFit.cover,
         ),
       );
@@ -185,24 +191,24 @@ class _PostImageMedia extends StatelessWidget {
     if (imagePaths.length == 1) {
       return _LocalPostImage(
         path: imagePaths.first,
-        height: compact ? 190 : 230,
+        height: compact ? 170 : 200,
         onTap: onTap,
       );
     }
 
     return SizedBox(
-      height: compact ? 190 : 230,
+      height: compact ? 170 : 200,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
         itemCount: imagePaths.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 12),
+        separatorBuilder: (context, index) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           return SizedBox(
-            width: compact ? 190 : 230,
+            width: compact ? 170 : 200,
             child: _LocalPostImage(
               path: imagePaths[index],
-              height: compact ? 190 : 230,
+              height: compact ? 170 : 200,
               onTap: onTap,
             ),
           );
@@ -235,7 +241,7 @@ class _LocalPostImage extends StatelessWidget {
         );
       },
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
         child: Image.file(
           File(path),
           width: double.infinity,
@@ -267,14 +273,18 @@ class _Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: const Color(0xFFF0F1F2),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
         text,
-        style: const TextStyle(color: kMuted, fontWeight: FontWeight.w600),
+        style: const TextStyle(
+          color: kMuted,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -306,16 +316,20 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: kMuted),
-          const SizedBox(width: 8),
+          Icon(icon, color: kMuted, size: 19),
+          const SizedBox(width: 6),
           Text(
             text,
-            style: const TextStyle(color: kMuted, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              color: kMuted,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -323,13 +337,13 @@ class _ActionButton extends StatelessWidget {
 
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: kLine),
           ),
           child: content,

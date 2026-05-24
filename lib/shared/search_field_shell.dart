@@ -8,32 +8,44 @@ class SearchFieldShell extends StatelessWidget {
     required this.hint,
     this.icon = Icons.search_rounded,
     this.onTap,
+    this.height = 60,
+    this.horizontalPadding = 22,
+    this.iconSize = 30,
+    this.borderRadius = 32,
+    this.textStyle,
   });
 
   final String hint;
   final IconData icon;
   final VoidCallback? onTap;
+  final double height;
+  final double horizontalPadding;
+  final double iconSize;
+  final double borderRadius;
+  final TextStyle? textStyle;
 
   @override
   Widget build(BuildContext context) {
     final content = Container(
-      height: 60,
+      height: height,
       decoration: BoxDecoration(
         color: const Color(0xFFF3F4F6),
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(borderRadius),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 22),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Row(
         children: [
-          Icon(icon, color: kMuted, size: 30),
-          const SizedBox(width: 14),
+          Icon(icon, color: kMuted, size: iconSize),
+          SizedBox(width: height <= 48 ? 10 : 14),
           Expanded(
             child: Text(
               hint,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: kMuted,
-                fontWeight: FontWeight.w500,
-              ),
+              style:
+                  textStyle ??
+                  Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: kMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
             ),
           ),
         ],
@@ -44,10 +56,10 @@ class SearchFieldShell extends StatelessWidget {
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(32),
+      borderRadius: BorderRadius.circular(borderRadius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(borderRadius),
         child: content,
       ),
     );

@@ -102,11 +102,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
               if (snapshot.hasError) {
                 return ListView(
-                  padding: const EdgeInsets.only(bottom: 138),
+                  padding: const EdgeInsets.only(bottom: 104),
                   children: [
                     _HomeHeader(onComposeTap: _openComposer),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 36, 24, 0),
+                      padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
                       child: Text(
                         'Database lokal belum bisa dibuka.',
                         style: Theme.of(context).textTheme.titleMedium
@@ -120,24 +120,24 @@ class _HomeScreenState extends State<HomeScreen> {
               if (snapshot.connectionState == ConnectionState.waiting &&
                   posts.isEmpty) {
                 return ListView(
-                  padding: const EdgeInsets.only(bottom: 138),
+                  padding: const EdgeInsets.only(bottom: 104),
                   children: [
                     _HomeHeader(onComposeTap: _openComposer),
-                    const SizedBox(height: 36),
+                    const SizedBox(height: 28),
                     const Center(child: CircularProgressIndicator()),
                   ],
                 );
               }
 
               return ListView.separated(
-                padding: const EdgeInsets.only(bottom: 138),
+                padding: const EdgeInsets.only(bottom: 104),
                 itemCount: posts.length + 1,
                 separatorBuilder: (context, index) {
                   if (index < 1) return const SizedBox.shrink();
                   return const Divider(
                     height: 1,
-                    indent: 24,
-                    endIndent: 24,
+                    indent: 20,
+                    endIndent: 20,
                     color: kLine,
                   );
                 },
@@ -156,8 +156,8 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           Positioned(
-            right: 24,
-            bottom: 24,
+            right: 18,
+            bottom: 18,
             child: _HomeCheckInButton(onTap: _openCheckInCamera),
           ),
         ],
@@ -178,19 +178,19 @@ class _HomeCheckInButton extends StatelessWidget {
       label: 'Check-in',
       child: Material(
         color: Colors.black,
-        borderRadius: BorderRadius.circular(28),
-        elevation: 10,
-        shadowColor: const Color(0x55000000),
+        borderRadius: BorderRadius.circular(20),
+        elevation: 6,
+        shadowColor: const Color(0x33000000),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(20),
           child: const SizedBox(
-            width: 96,
-            height: 96,
+            width: 64,
+            height: 64,
             child: Icon(
               Icons.add_location_alt_outlined,
               color: Colors.white,
-              size: 64,
+              size: 38,
             ),
           ),
         ),
@@ -210,11 +210,11 @@ class _HomeHeader extends StatelessWidget {
       children: [
         const CirculHeader(),
         Padding(
-          padding: const EdgeInsets.fromLTRB(28, 8, 28, 26),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
           child: Row(
             children: [
-              const SarahAvatar(radius: 31, showAddBadge: true),
-              const SizedBox(width: 20),
+              const SarahAvatar(radius: 25, showAddBadge: true),
+              const SizedBox(width: 14),
               Expanded(child: _HomeComposerEntry(onTap: onComposeTap)),
             ],
           ),
@@ -235,6 +235,14 @@ class _HomeComposerEntry extends StatelessWidget {
     return SearchFieldShell(
       hint: 'Kirim sesuatu ke komunitas...',
       icon: Icons.edit_note_rounded,
+      height: 48,
+      horizontalPadding: 16,
+      iconSize: 23,
+      borderRadius: 24,
+      textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        color: kMuted,
+        fontWeight: FontWeight.w500,
+      ),
       onTap: onTap,
     );
   }
