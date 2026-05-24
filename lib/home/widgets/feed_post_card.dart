@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../image_viewer/uploaded_image_fullscreen_page.dart';
 import '../../mock_data.dart';
+import '../../shared/relative_timestamp.dart';
 import '../../shared/sarah_avatar.dart';
 
 class FeedPostCard extends StatelessWidget {
@@ -26,6 +27,9 @@ class FeedPostCard extends StatelessWidget {
     final topic = post.topic.trim();
     final showTitle =
         title.isNotEmpty && title.toLowerCase() != topic.toLowerCase();
+    final timestamp = post.createdAt == null
+        ? post.timeAgo
+        : formatRelativeTimestamp(post.createdAt!);
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,7 +63,7 @@ class FeedPostCard extends StatelessWidget {
                       ],
                       const SizedBox(width: 6),
                       Text(
-                        compact ? post.timeAgo : post.timeAgo,
+                        timestamp,
                         style: Theme.of(
                           context,
                         ).textTheme.bodySmall?.copyWith(color: kMuted),

@@ -98,6 +98,7 @@ class FeedPostRepository {
       title: row['title'] as String,
       body: row['body'] as String,
       imageAsset: row['image_asset'] as String,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
       topic: (row['topic'] as String?) ?? '',
       imagePaths: _imagePathsFromRow(row['image_paths']),
       likes: row['likes'] as int,

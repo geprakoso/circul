@@ -16,11 +16,13 @@ class CaptureResultScreen extends StatefulWidget {
     super.key,
     this.imagePath,
     this.onDownSelected,
+    this.useDummyCapture = false,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
 
   final String? imagePath;
   final ValueChanged<LatLng>? onDownSelected;
+  final bool useDummyCapture;
   final ImagePicker? _imagePicker;
 
   @override
@@ -66,6 +68,17 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
   }
 
   Future<void> _retakePhoto() async {
+    if (widget.useDummyCapture && Platform.isMacOS) {
+      setState(() {
+        _imagePath = null;
+        _capturedAt = DateTime.now();
+        _locationText = 'Getting location...';
+      });
+      _loadCurrentLocation();
+      _showPlaceholderMessage('Dummy camera dipakai untuk development macOS.');
+      return;
+    }
+
     try {
       final image = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -275,6 +288,7 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
                     width: double.infinity,
                     child: _CapturePreview(
                       imagePath: _imagePath,
+                      useDummyCapture: widget.useDummyCapture,
                       locationText: _locationText,
                       capturedTimeText: _formatCaptureTime(_capturedAt),
                       onRetake: _retakePhoto,
@@ -393,17 +407,20 @@ class _CapturePreview extends StatelessWidget {
     required this.onRetake,
     required this.locationText,
     required this.capturedTimeText,
+    required this.useDummyCapture,
     this.imagePath,
   });
 
   final VoidCallback onRetake;
   final String locationText;
   final String capturedTimeText;
+  final bool useDummyCapture;
   final String? imagePath;
 
   @override
   Widget build(BuildContext context) {
     final capturedPath = imagePath;
+    final hasCapture = capturedPath != null || useDummyCapture;
     return Stack(
       children: [
         Positioned.fill(
@@ -423,7 +440,7 @@ class _CapturePreview extends StatelessWidget {
                   ),
           ),
         ),
-        if (capturedPath != null) ...[
+        if (hasCapture) ...[
           const Positioned(left: 16, top: 14, child: _CapturedBadge()),
           Positioned(
             left: 16,

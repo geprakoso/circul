@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import '../../core/constants.dart';
 import '../../image_viewer/uploaded_image_fullscreen_page.dart';
 
+const _attachmentHeight = 136.0;
+const _attachmentRadius = 12.0;
+
 class AttachmentMediaStrip extends StatelessWidget {
   const AttachmentMediaStrip({
     super.key,
@@ -22,10 +25,9 @@ class AttachmentMediaStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const height = 170.0;
         final cardWidth = imagePaths.isEmpty
             ? constraints.maxWidth
-            : math.min(170.0, constraints.maxWidth * 0.72);
+            : math.min(_attachmentHeight, constraints.maxWidth * 0.64);
 
         if (imagePaths.isEmpty) {
           return LocationPlaceholderBox(
@@ -35,7 +37,7 @@ class AttachmentMediaStrip extends StatelessWidget {
         }
 
         return SizedBox(
-          height: height,
+          height: _attachmentHeight,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.none,
@@ -45,14 +47,14 @@ class AttachmentMediaStrip extends StatelessWidget {
                   enabled: locationEnabled,
                   width: cardWidth,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 for (final path in imagePaths) ...[
                   ImagePreviewCard(
                     path: path,
                     width: cardWidth,
                     onRemove: () => onRemoveImage(path),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                 ],
               ],
             ),
@@ -78,10 +80,10 @@ class ImagePreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(_attachmentRadius),
       child: SizedBox(
         width: width,
-        height: 170,
+        height: _attachmentHeight,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -113,13 +115,13 @@ class ImagePreviewCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              right: 8,
-              top: 8,
+              right: 7,
+              top: 7,
               child: GestureDetector(
                 onTap: onRemove,
                 child: Container(
-                  width: 30,
-                  height: 30,
+                  width: 26,
+                  height: 26,
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.68),
                     shape: BoxShape.circle,
@@ -130,7 +132,7 @@ class ImagePreviewCard extends StatelessWidget {
                   child: const Icon(
                     Icons.close_rounded,
                     color: Colors.white,
-                    size: 19,
+                    size: 17,
                   ),
                 ),
               ),
@@ -158,10 +160,10 @@ class LocationPlaceholderBox extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       opacity: enabled ? 1 : 0.46,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(_attachmentRadius),
         child: Container(
           width: width,
-          height: 170,
+          height: _attachmentHeight,
           decoration: BoxDecoration(
             color: const Color(0xFF151819),
             border: Border.all(
@@ -178,28 +180,28 @@ class LocationPlaceholderBox extends StatelessWidget {
                   child: ColoredBox(color: Colors.black.withValues(alpha: 0.2)),
                 ),
               Positioned(
-                left: 12,
-                top: 12,
+                left: 10,
+                top: 10,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                    horizontal: 10,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
                     color: const Color(0xE61A1D1F),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: const Color(0xFF303438)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.flag_outlined, color: kCirculGreen, size: 18),
-                      SizedBox(width: 8),
+                      Icon(Icons.flag_outlined, color: kCirculGreen, size: 15),
+                      SizedBox(width: 6),
                       Text(
                         'Lokasi check-in',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 13,
+                          fontSize: 11,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -209,23 +211,23 @@ class LocationPlaceholderBox extends StatelessWidget {
               ),
               Center(child: MapPinPlaceholder(enabled: enabled)),
               Positioned(
-                right: 12,
-                bottom: 12,
+                right: 10,
+                bottom: 10,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 7,
+                    horizontal: 8,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
                     color: const Color(0xE61A1D1F),
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: const Color(0xFF303438)),
                   ),
                   child: Text(
-                    enabled ? 'Map placeholder' : 'Tap bendera untuk check-in',
+                    enabled ? 'Map placeholder' : 'Tap bendera',
                     style: const TextStyle(
                       color: Color(0xFFB8BBBF),
-                      fontSize: 12,
+                      fontSize: 10.5,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -250,24 +252,24 @@ class MapPinPlaceholder extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       scale: enabled ? 1 : 0.86,
       child: Container(
-        width: 54,
-        height: 54,
+        width: 42,
+        height: 42,
         decoration: BoxDecoration(
           color: enabled ? const Color(0xFFE9FFF0) : const Color(0xFF39403C),
           shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFF101113), width: 5),
+          border: Border.all(color: const Color(0xFF101113), width: 4),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: enabled ? 0.4 : 0.18),
-              blurRadius: enabled ? 18 : 8,
-              offset: const Offset(0, 8),
+              blurRadius: enabled ? 12 : 6,
+              offset: const Offset(0, 5),
             ),
           ],
         ),
         child: Icon(
           Icons.flag_rounded,
           color: enabled ? kCirculGreen : const Color(0xFF73777C),
-          size: 28,
+          size: 22,
         ),
       ),
     );

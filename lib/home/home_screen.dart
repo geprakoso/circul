@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -63,6 +65,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openCheckInCamera() async {
+    if (Platform.isMacOS) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => CaptureResultScreen(
+            useDummyCapture: true,
+            onDownSelected: widget.onDownCheckIn,
+          ),
+        ),
+      );
+      return;
+    }
+
     try {
       final image = await _imagePicker.pickImage(
         source: ImageSource.camera,

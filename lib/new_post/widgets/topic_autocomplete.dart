@@ -83,7 +83,7 @@ class TopicAutocompleteState extends State<TopicAutocomplete> {
       fieldViewBuilder:
           (context, textEditingController, focusNode, onFieldSubmitted) {
             return SizedBox(
-              width: 214,
+              width: 180,
               child: TextField(
                 controller: textEditingController,
                 focusNode: focusNode,
@@ -92,7 +92,7 @@ class TopicAutocompleteState extends State<TopicAutocomplete> {
                 textCapitalization: TextCapitalization.words,
                 style: const TextStyle(
                   color: _softText,
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w700,
                 ),
                 decoration: const InputDecoration(
@@ -101,7 +101,7 @@ class TopicAutocompleteState extends State<TopicAutocomplete> {
                   hintText: 'Topik baru',
                   hintStyle: TextStyle(
                     color: _softText,
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
                   contentPadding: EdgeInsets.zero,
@@ -125,17 +125,17 @@ class TopicAutocompleteState extends State<TopicAutocomplete> {
             color: Colors.transparent,
             child: Container(
               width: 270,
-              constraints: const BoxConstraints(maxHeight: 240),
-              margin: const EdgeInsets.only(top: 8),
+              constraints: const BoxConstraints(maxHeight: 210),
+              margin: const EdgeInsets.only(top: 6),
               decoration: BoxDecoration(
                 color: const Color(0xFF222426),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: const Color(0xFF34373A)),
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x66000000),
-                    blurRadius: 20,
-                    offset: Offset(0, 12),
+                    blurRadius: 14,
+                    offset: Offset(0, 8),
                   ),
                 ],
               ),
@@ -151,22 +151,23 @@ class TopicAutocompleteState extends State<TopicAutocomplete> {
                     onTap: () => onSelected(option),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
+                        horizontal: 12,
+                        vertical: 10,
                       ),
                       child: Row(
                         children: [
                           const Icon(
                             Icons.tag_rounded,
                             color: kCirculGreen,
-                            size: 20,
+                            size: 18,
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               option,
                               style: const TextStyle(
                                 color: Colors.white,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),

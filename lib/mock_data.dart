@@ -18,6 +18,7 @@ class FeedPost {
     required this.imageAsset,
     required this.likes,
     required this.comments,
+    this.createdAt,
     this.topic = '',
     this.imagePaths = const [],
   });
@@ -29,6 +30,7 @@ class FeedPost {
   final String title;
   final String body;
   final String imageAsset;
+  final DateTime? createdAt;
   final String topic;
   final List<String> imagePaths;
   final int likes;

@@ -17,8 +17,8 @@ class ComposeTools extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 18,
-      runSpacing: 10,
+      spacing: 10,
+      runSpacing: 8,
       children: [
         ComposeToolButton(
           icon: Icons.image_outlined,
@@ -69,7 +69,7 @@ class ComposeToolButton extends StatelessWidget {
       tooltip: tooltip,
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
-      constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
       style: IconButton.styleFrom(
         backgroundColor: selected ? const Color(0xFF183B2A) : null,
       ),
@@ -77,7 +77,7 @@ class ComposeToolButton extends StatelessWidget {
       icon: Icon(
         icon,
         color: selected ? kCirculGreen : const Color(0xFF73777C),
-        size: 34,
+        size: 25,
       ),
     );
   }

@@ -124,14 +124,14 @@ class _NewPostScreenState extends State<NewPostScreen> {
               const Divider(height: 1, color: Color(0xFF202225)),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
                   child: Column(
                     children: [
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SarahAvatar(radius: 30),
-                          const SizedBox(width: 16),
+                          const SarahAvatar(radius: 24),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,14 +145,14 @@ class _NewPostScreenState extends State<NewPostScreen> {
                                       'sarahmae',
                                       style: TextStyle(
                                         color: Colors.white,
-                                        fontSize: 18,
+                                        fontSize: 16,
                                         fontWeight: FontWeight.w800,
                                       ),
                                     ),
                                     const Icon(
                                       Icons.chevron_right_rounded,
                                       color: _softText,
-                                      size: 21,
+                                      size: 18,
                                     ),
                                     TopicAutocomplete(
                                       topic: _selectedTopic,
@@ -170,8 +170,8 @@ class _NewPostScreenState extends State<NewPostScreen> {
                                   cursorColor: Colors.white,
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontSize: 22,
-                                    height: 1.3,
+                                    fontSize: 19,
+                                    height: 1.32,
                                     fontWeight: FontWeight.w500,
                                   ),
                                   decoration: const InputDecoration(
@@ -179,13 +179,13 @@ class _NewPostScreenState extends State<NewPostScreen> {
                                     hintText: 'Apa yang baru?',
                                     hintStyle: TextStyle(
                                       color: _softText,
-                                      fontSize: 22,
+                                      fontSize: 19,
                                       fontWeight: FontWeight.w500,
                                     ),
-                                    contentPadding: EdgeInsets.only(top: 6),
+                                    contentPadding: EdgeInsets.only(top: 4),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 6),
                                 ComposeTools(
                                   locationCheckInEnabled:
                                       _locationCheckInEnabled,
@@ -195,7 +195,7 @@ class _NewPostScreenState extends State<NewPostScreen> {
                                         !_locationCheckInEnabled,
                                   ),
                                 ),
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 12),
                                 AttachmentMediaStrip(
                                   locationEnabled: _locationCheckInEnabled,
                                   imagePaths: _selectedImagePaths,

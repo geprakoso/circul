@@ -8,26 +8,28 @@ class ComposeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 76,
+      height: 60,
       child: Row(
         children: [
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           IconButton(
             tooltip: 'Tutup',
             onPressed: onClose,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
             icon: const Icon(
               Icons.close_rounded,
               color: Colors.white,
-              size: 36,
+              size: 26,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 6),
           const Expanded(
             child: Text(
               'Post baru',
               style: TextStyle(
                 color: Colors.white,
-                fontSize: 27,
+                fontSize: 21,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -35,23 +37,27 @@ class ComposeHeader extends StatelessWidget {
           IconButton(
             tooltip: 'Draf',
             onPressed: () {},
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
             icon: const Icon(
               Icons.note_add_outlined,
               color: Colors.white,
-              size: 31,
+              size: 24,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           IconButton(
             tooltip: 'Lainnya',
             onPressed: () {},
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
             icon: const Icon(
               Icons.more_horiz_rounded,
               color: Colors.white,
-              size: 34,
+              size: 26,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
         ],
       ),
     );
