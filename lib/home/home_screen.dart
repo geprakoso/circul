@@ -18,12 +18,14 @@ class HomeScreen extends StatefulWidget {
     super.key,
     this.feedPostRepository,
     this.onDownCheckIn,
+    this.onOpenLocationPost,
     this.refreshToken = 0,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
 
   final FeedPostRepository? feedPostRepository;
   final ValueChanged<LatLng>? onDownCheckIn;
+  final ValueChanged<FeedPost>? onOpenLocationPost;
   final int refreshToken;
   final ImagePicker? _imagePicker;
 
@@ -72,6 +74,19 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (context) => CommentScreen(post: post)),
     );
+  }
+
+  void _openLocationPost(FeedPost post) {
+    if (post.locationPoint == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Koordinat lokasi belum tersedia.')),
+        );
+      return;
+    }
+
+    widget.onOpenLocationPost?.call(post);
   }
 
   void _refreshPostsAfterCheckInPost() {
@@ -189,6 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   return FeedPostCard(
                     post: post,
                     onOpenComments: () => _openComments(post),
+                    onOpenLocation: () => _openLocationPost(post),
                   );
                 },
               );

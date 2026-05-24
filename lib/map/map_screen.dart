@@ -24,12 +24,14 @@ class MapScreen extends StatefulWidget {
     this.onDownCheckIn,
     this.feedPostRepository,
     this.onPostCreated,
+    this.focusedCheckIn,
   });
 
   final List<MapIssueCluster> issueClusters;
   final ValueChanged<LatLng>? onDownCheckIn;
   final FeedPostRepository? feedPostRepository;
   final VoidCallback? onPostCreated;
+  final MapFocusedCheckIn? focusedCheckIn;
 
   static double distanceMeters(LatLng first, LatLng second) {
     return const Distance().as(LengthUnit.Meter, first, second);
@@ -62,6 +64,20 @@ class _MapScreenState extends State<MapScreen>
     _cameraAnimationController.dispose();
     _mapController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant MapScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final focusedCheckIn = widget.focusedCheckIn;
+    if (focusedCheckIn != null &&
+        focusedCheckIn.id != oldWidget.focusedCheckIn?.id) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _flagMenuExpanded = false);
+        _animateMapTo(focusedCheckIn.point, 17);
+      });
+    }
   }
 
   @override
@@ -114,6 +130,14 @@ class _MapScreenState extends State<MapScreen>
                     height: _clusterMarkerSizeForCount(cluster.count) + 8,
                     child: _IssueQuantityMarker(cluster: cluster),
                   ),
+                if (widget.focusedCheckIn case final focusedCheckIn?)
+                  Marker(
+                    point: focusedCheckIn.point,
+                    width: 58,
+                    height: 58,
+                    alignment: Alignment.topCenter,
+                    child: const _FocusedCheckInMarker(),
+                  ),
               ],
             ),
             const RichAttributionWidget(
@@ -160,24 +184,33 @@ class _MapScreenState extends State<MapScreen>
 
   List<_VisibleCheckIn> _visibleCheckIns() {
     final bounds = _visibleBounds;
+    final focusedCheckIn = widget.focusedCheckIn;
+    final distanceAnchor = focusedCheckIn?.point ?? _currentLocation;
     final items = <_VisibleCheckIn>[
+      if (focusedCheckIn != null)
+        _VisibleCheckIn.fromFocusedCheckIn(
+          focusedCheckIn: focusedCheckIn,
+          currentLocation: distanceAnchor,
+        ),
       for (var i = 0; i < widget.issueClusters.length; i++)
         _VisibleCheckIn.fromCluster(
           cluster: widget.issueClusters[i],
           index: i,
-          currentLocation: _currentLocation,
+          currentLocation: distanceAnchor,
         ),
       for (var i = 0; i < _impactSpots.length; i++)
         _VisibleCheckIn.fromImpactSpot(
           spot: _impactSpots[i],
           index: i,
-          currentLocation: _currentLocation,
+          currentLocation: distanceAnchor,
         ),
     ];
 
     final visibleItems = bounds == null
         ? items
-        : items.where((item) => bounds.contains(item.point)).toList();
+        : items.where((item) {
+            return item.isFocused || bounds.contains(item.point);
+          }).toList();
 
     visibleItems.sort(
       (first, second) => first.distanceMeters.compareTo(second.distanceMeters),
@@ -300,6 +333,22 @@ class _MapScreenState extends State<MapScreen>
   }
 }
 
+class MapFocusedCheckIn {
+  const MapFocusedCheckIn({
+    required this.id,
+    required this.point,
+    required this.label,
+    this.coordinateLabel,
+    this.caption,
+  });
+
+  final int id;
+  final LatLng point;
+  final String label;
+  final String? coordinateLabel;
+  final String? caption;
+}
+
 class MapIssueCluster {
   const MapIssueCluster({
     required this.point,
@@ -329,7 +378,29 @@ class _VisibleCheckIn {
     required this.color,
     required this.icon,
     required this.distanceMeters,
+    this.isFocused = false,
   });
+
+  factory _VisibleCheckIn.fromFocusedCheckIn({
+    required MapFocusedCheckIn focusedCheckIn,
+    required LatLng currentLocation,
+  }) {
+    final distanceMeters = MapScreen.distanceMeters(
+      currentLocation,
+      focusedCheckIn.point,
+    );
+
+    return _VisibleCheckIn(
+      point: focusedCheckIn.point,
+      title: focusedCheckIn.label,
+      subtitle: focusedCheckIn.caption ?? 'Submitted check-in',
+      meta: focusedCheckIn.coordinateLabel ?? _distanceLabel(distanceMeters),
+      color: kCirculGreen,
+      icon: Icons.flag_rounded,
+      distanceMeters: distanceMeters,
+      isFocused: true,
+    );
+  }
 
   factory _VisibleCheckIn.fromCluster({
     required MapIssueCluster cluster,
@@ -383,6 +454,7 @@ class _VisibleCheckIn {
   final Color color;
   final IconData icon;
   final double distanceMeters;
+  final bool isFocused;
 }
 
 class _LatLngTween extends Tween<LatLng> {
@@ -931,6 +1003,48 @@ class _CurrentLocationMarker extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _FocusedCheckInMarker extends StatelessWidget {
+  const _FocusedCheckInMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        Positioned(
+          top: 8,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: kCirculGreen.withValues(alpha: .18),
+              shape: BoxShape.circle,
+              border: Border.all(color: kCirculGreen.withValues(alpha: .34)),
+            ),
+          ),
+        ),
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: kCirculGreen,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.flag_rounded, color: Colors.white, size: 20),
+        ),
+      ],
     );
   }
 }

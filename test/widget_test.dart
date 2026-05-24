@@ -99,6 +99,11 @@ class _FakeFeedPostRepository extends FeedPostRepository {
     required bool allowReplies,
     String? city,
     List<String> imagePaths = const [],
+    bool locationEnabled = false,
+    String? locationLabel,
+    String? coordinateLabel,
+    double? locationLatitude,
+    double? locationLongitude,
   }) async {
     _posts.insert(
       0,
@@ -110,6 +115,11 @@ class _FakeFeedPostRepository extends FeedPostRepository {
         body: body,
         imageAsset: cleanupAsset,
         imagePaths: imagePaths,
+        locationEnabled: locationEnabled,
+        locationLabel: locationLabel,
+        coordinateLabel: coordinateLabel,
+        locationLatitude: locationLatitude,
+        locationLongitude: locationLongitude,
         likes: 0,
         comments: 0,
       ),

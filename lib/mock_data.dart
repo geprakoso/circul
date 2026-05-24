@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 export 'core/constants.dart';
 
@@ -21,6 +22,11 @@ class FeedPost {
     this.createdAt,
     this.topic = '',
     this.imagePaths = const [],
+    this.locationEnabled = false,
+    this.locationLabel,
+    this.coordinateLabel,
+    this.locationLatitude,
+    this.locationLongitude,
   });
 
   final String id;
@@ -33,8 +39,29 @@ class FeedPost {
   final DateTime? createdAt;
   final String topic;
   final List<String> imagePaths;
+  final bool locationEnabled;
+  final String? locationLabel;
+  final String? coordinateLabel;
+  final double? locationLatitude;
+  final double? locationLongitude;
   final int likes;
   final int comments;
+
+  LatLng? get locationPoint {
+    final latitude = locationLatitude;
+    final longitude = locationLongitude;
+    if (latitude != null && longitude != null) {
+      return LatLng(latitude, longitude);
+    }
+
+    final coordinateParts = coordinateLabel?.split(',');
+    if (coordinateParts == null || coordinateParts.length != 2) return null;
+
+    final parsedLatitude = double.tryParse(coordinateParts.first.trim());
+    final parsedLongitude = double.tryParse(coordinateParts.last.trim());
+    if (parsedLatitude == null || parsedLongitude == null) return null;
+    return LatLng(parsedLatitude, parsedLongitude);
+  }
 }
 
 class Topic {

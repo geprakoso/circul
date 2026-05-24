@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../../image_viewer/uploaded_image_fullscreen_page.dart';
 import '../../mock_data.dart';
+import '../../new_post/widgets/attachment_media_strip.dart';
 import '../../shared/relative_timestamp.dart';
 import '../../shared/sarah_avatar.dart';
 
@@ -14,12 +16,14 @@ class FeedPostCard extends StatelessWidget {
     this.compact = false,
     this.framed = false,
     this.onOpenComments,
+    this.onOpenLocation,
   });
 
   final FeedPost post;
   final bool compact;
   final bool framed;
   final VoidCallback? onOpenComments;
+  final VoidCallback? onOpenLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -89,10 +93,11 @@ class FeedPostCard extends StatelessWidget {
                     ).textTheme.bodyLarge?.copyWith(height: 1.45, color: kInk),
                   ),
                   const SizedBox(height: 14),
-                  _PostImageMedia(
+                  _PostMediaStrip(
                     post: post,
                     compact: compact,
                     onTap: onOpenComments,
+                    onLocationTap: onOpenLocation,
                   ),
                   if (!compact) ...[
                     const SizedBox(height: 14),
@@ -164,60 +169,181 @@ class FeedPostCard extends StatelessWidget {
   }
 }
 
-class _PostImageMedia extends StatelessWidget {
-  const _PostImageMedia({
+class _PostMediaStrip extends StatelessWidget {
+  const _PostMediaStrip({
     required this.post,
     required this.compact,
     this.onTap,
+    this.onLocationTap,
   });
 
   final FeedPost post;
   final bool compact;
   final VoidCallback? onTap;
+  final VoidCallback? onLocationTap;
 
   @override
   Widget build(BuildContext context) {
     final imagePaths = post.imagePaths;
+    final imageAsset = _visibleImageAsset(post);
 
-    if (imagePaths.isEmpty) {
-      if (post.imageAsset.isEmpty) return const SizedBox.shrink();
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.asset(
-          post.imageAsset,
-          width: double.infinity,
+    if (!post.locationEnabled) {
+      if (imagePaths.isEmpty) {
+        if (imageAsset == null) return const SizedBox.shrink();
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.asset(
+            imageAsset,
+            width: double.infinity,
+            height: compact ? 170 : 200,
+            fit: BoxFit.cover,
+          ),
+        );
+      }
+
+      if (imagePaths.length == 1) {
+        return _LocalPostImage(
+          path: imagePaths.first,
           height: compact ? 170 : 200,
-          fit: BoxFit.cover,
+          onTap: onTap,
+        );
+      }
+
+      return SizedBox(
+        height: compact ? 170 : 200,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          itemCount: imagePaths.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 10),
+          itemBuilder: (context, index) {
+            return SizedBox(
+              width: compact ? 170 : 200,
+              child: _LocalPostImage(
+                path: imagePaths[index],
+                height: compact ? 170 : 200,
+                onTap: onTap,
+              ),
+            );
+          },
         ),
       );
     }
 
-    if (imagePaths.length == 1) {
-      return _LocalPostImage(
-        path: imagePaths.first,
-        height: compact ? 170 : 200,
-        onTap: onTap,
-      );
-    }
+    final hasImages = imagePaths.isNotEmpty || imageAsset != null;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final locationWidth = hasImages
+            ? math.min(136.0, constraints.maxWidth * 0.64)
+            : constraints.maxWidth;
 
-    return SizedBox(
-      height: compact ? 170 : 200,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        itemCount: imagePaths.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          return SizedBox(
-            width: compact ? 170 : 200,
-            child: _LocalPostImage(
-              path: imagePaths[index],
-              height: compact ? 170 : 200,
-              onTap: onTap,
+        if (!hasImages) {
+          return _LocationCardTapTarget(
+            onTap: onLocationTap,
+            child: LocationPlaceholderBox(
+              enabled: true,
+              loading: false,
+              width: locationWidth,
+              label: post.locationLabel ?? post.city,
+              coordinateLabel: post.coordinateLabel,
             ),
           );
-        },
-      ),
+        }
+
+        return SizedBox(
+          height: 136,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            child: Row(
+              children: [
+                _LocationCardTapTarget(
+                  onTap: onLocationTap,
+                  child: LocationPlaceholderBox(
+                    enabled: true,
+                    loading: false,
+                    width: locationWidth,
+                    label: post.locationLabel ?? post.city,
+                    coordinateLabel: post.coordinateLabel,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                if (imageAsset != null) ...[
+                  _AssetImagePreviewCard(
+                    asset: imageAsset,
+                    width: locationWidth,
+                    onTap: onTap,
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                for (final path in imagePaths) ...[
+                  SizedBox(
+                    width: locationWidth,
+                    child: _LocalPostImage(
+                      path: path,
+                      height: 136,
+                      onTap: onTap,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String? _visibleImageAsset(FeedPost post) {
+    if (post.imageAsset.isEmpty) return null;
+    if (post.locationEnabled && post.imagePaths.isEmpty) return null;
+    return post.imageAsset;
+  }
+}
+
+class _LocationCardTapTarget extends StatelessWidget {
+  const _LocationCardTapTarget({required this.child, this.onTap});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (onTap == null) return child;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: child,
+    );
+  }
+}
+
+class _AssetImagePreviewCard extends StatelessWidget {
+  const _AssetImagePreviewCard({
+    required this.asset,
+    required this.width,
+    this.onTap,
+  });
+
+  final String asset;
+  final double width;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.asset(asset, width: width, height: 136, fit: BoxFit.cover),
+    );
+
+    if (onTap == null) return image;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: onTap,
+      child: image,
     );
   }
 }

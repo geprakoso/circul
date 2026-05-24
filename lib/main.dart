@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
-import 'core/constants.dart';
 import 'event/event_screen.dart';
 import 'feed_post_repository.dart';
 import 'home/home_screen.dart';
 import 'map/map_screen.dart';
+import 'mock_data.dart';
 import 'profile/profile_screen.dart';
 import 'search/search_screen.dart';
 import 'shared/sarah_avatar.dart';
@@ -55,6 +55,7 @@ class CirculShell extends StatefulWidget {
 class _CirculShellState extends State<CirculShell> {
   var _index = 0;
   var _homeRefreshToken = 0;
+  MapFocusedCheckIn? _focusedCheckIn;
   final _issueClusters = <MapIssueCluster>[];
 
   void _recordHeatmapLevel(LatLng point, {required bool showMap}) {
@@ -95,12 +96,29 @@ class _CirculShellState extends State<CirculShell> {
     setState(() => _homeRefreshToken++);
   }
 
+  void _openPostLocationOnMap(FeedPost post) {
+    final point = post.locationPoint;
+    if (point == null) return;
+
+    setState(() {
+      _focusedCheckIn = MapFocusedCheckIn(
+        id: DateTime.now().microsecondsSinceEpoch,
+        point: point,
+        label: post.locationLabel ?? post.city,
+        coordinateLabel: post.coordinateLabel,
+        caption: post.title,
+      );
+      _index = 1;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final screens = [
       HomeScreen(
         feedPostRepository: widget.feedPostRepository,
         onDownCheckIn: _addHomeCheckInHeatmapLevel,
+        onOpenLocationPost: _openPostLocationOnMap,
         refreshToken: _homeRefreshToken,
       ),
       MapScreen(
@@ -108,6 +126,7 @@ class _CirculShellState extends State<CirculShell> {
         feedPostRepository: widget.feedPostRepository,
         onDownCheckIn: _addHeatmapLevel,
         onPostCreated: _refreshHomePosts,
+        focusedCheckIn: _focusedCheckIn,
       ),
       const SearchScreen(),
       const EventScreen(),

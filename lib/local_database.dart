@@ -18,7 +18,7 @@ class CirculDatabase {
     final dbPath = await getDatabasesPath();
     final database = await openDatabase(
       p.join(dbPath, 'circul.db'),
-      version: 3,
+      version: 5,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -46,6 +46,11 @@ class CirculDatabase {
         body TEXT NOT NULL,
         image_asset TEXT NOT NULL,
         image_paths TEXT NOT NULL DEFAULT '[]',
+        location_enabled INTEGER NOT NULL DEFAULT 0,
+        location_label TEXT,
+        coordinate_label TEXT,
+        location_latitude REAL,
+        location_longitude REAL,
         likes INTEGER NOT NULL DEFAULT 0,
         comments INTEGER NOT NULL DEFAULT 0,
         topic TEXT,
@@ -95,6 +100,26 @@ class CirculDatabase {
     }
     if (oldVersion < 3) {
       await _createPostCommentsTable(db);
+    }
+    if (oldVersion < 4) {
+      await db.execute(
+        "ALTER TABLE $feedPostsTable "
+        "ADD COLUMN location_enabled INTEGER NOT NULL DEFAULT 0",
+      );
+      await db.execute(
+        "ALTER TABLE $feedPostsTable ADD COLUMN location_label TEXT",
+      );
+      await db.execute(
+        "ALTER TABLE $feedPostsTable ADD COLUMN coordinate_label TEXT",
+      );
+    }
+    if (oldVersion < 5) {
+      await db.execute(
+        "ALTER TABLE $feedPostsTable ADD COLUMN location_latitude REAL",
+      );
+      await db.execute(
+        "ALTER TABLE $feedPostsTable ADD COLUMN location_longitude REAL",
+      );
     }
   }
 }

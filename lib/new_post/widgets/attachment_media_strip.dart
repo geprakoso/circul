@@ -13,6 +13,7 @@ class AttachmentMediaStrip extends StatelessWidget {
   const AttachmentMediaStrip({
     super.key,
     required this.locationEnabled,
+    required this.locationLoading,
     required this.imagePaths,
     required this.onRemoveImage,
     this.locationLabel,
@@ -20,6 +21,7 @@ class AttachmentMediaStrip extends StatelessWidget {
   });
 
   final bool locationEnabled;
+  final bool locationLoading;
   final List<String> imagePaths;
   final ValueChanged<String> onRemoveImage;
   final String? locationLabel;
@@ -36,6 +38,7 @@ class AttachmentMediaStrip extends StatelessWidget {
         if (imagePaths.isEmpty) {
           return LocationPlaceholderBox(
             enabled: locationEnabled,
+            loading: locationLoading,
             width: cardWidth,
             label: locationLabel,
             coordinateLabel: coordinateLabel,
@@ -51,6 +54,7 @@ class AttachmentMediaStrip extends StatelessWidget {
               children: [
                 LocationPlaceholderBox(
                   enabled: locationEnabled,
+                  loading: locationLoading,
                   width: cardWidth,
                   label: locationLabel,
                   coordinateLabel: coordinateLabel,
@@ -156,12 +160,14 @@ class LocationPlaceholderBox extends StatelessWidget {
   const LocationPlaceholderBox({
     super.key,
     required this.enabled,
+    required this.loading,
     required this.width,
     this.label,
     this.coordinateLabel,
   });
 
   final bool enabled;
+  final bool loading;
   final double width;
   final String? label;
   final String? coordinateLabel;
@@ -221,7 +227,17 @@ class LocationPlaceholderBox extends StatelessWidget {
                   ),
                 ),
               ),
-              Center(child: MapPinPlaceholder(enabled: enabled)),
+              Center(
+                child: loading
+                    ? const SizedBox.square(
+                        dimension: 34,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: kCirculGreen,
+                        ),
+                      )
+                    : MapPinPlaceholder(enabled: enabled),
+              ),
               Positioned(
                 right: 10,
                 bottom: 10,
@@ -238,6 +254,7 @@ class LocationPlaceholderBox extends StatelessWidget {
                   ),
                   child: _LocationCaption(
                     enabled: enabled,
+                    loading: loading,
                     label: label,
                     coordinateLabel: coordinateLabel,
                   ),
@@ -254,11 +271,13 @@ class LocationPlaceholderBox extends StatelessWidget {
 class _LocationCaption extends StatelessWidget {
   const _LocationCaption({
     required this.enabled,
+    required this.loading,
     this.label,
     this.coordinateLabel,
   });
 
   final bool enabled;
+  final bool loading;
   final String? label;
   final String? coordinateLabel;
 
@@ -273,6 +292,19 @@ class _LocationCaption extends StatelessWidget {
           color: Color(0xFFB8BBBF),
           fontSize: 10.5,
           fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+
+    if (loading) {
+      return const Text(
+        'Getting location...',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w800,
         ),
       );
     }

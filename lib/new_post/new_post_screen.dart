@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/constants.dart';
 import '../feed_post_repository.dart';
@@ -20,6 +23,7 @@ class NewPostScreen extends StatefulWidget {
     this.initialLocationCheckInEnabled = false,
     this.initialLocationLabel,
     this.initialCoordinateLabel,
+    this.initialLocationPoint,
   });
 
   final FeedPostRepository? feedPostRepository;
@@ -29,6 +33,7 @@ class NewPostScreen extends StatefulWidget {
   final bool initialLocationCheckInEnabled;
   final String? initialLocationLabel;
   final String? initialCoordinateLabel;
+  final LatLng? initialLocationPoint;
 
   @override
   State<NewPostScreen> createState() => _NewPostScreenState();
@@ -44,12 +49,26 @@ class _NewPostScreenState extends State<NewPostScreen> {
   var _selectedTopic = '';
   var _allowReplies = true;
   var _locationCheckInEnabled = false;
+  var _isLocating = false;
   var _isSubmitting = false;
   final _selectedImagePaths = <String>[];
-  late final String? _locationLabel;
-  late final String? _coordinateLabel;
+  String? _locationLabel;
+  String? _coordinateLabel;
+  LatLng? _locationPoint;
 
   bool get _canPost => !_isSubmitting && _controller.text.trim().isNotEmpty;
+  String? get _postCityLabel {
+    final label = _locationLabel?.trim();
+    if (!_locationCheckInEnabled ||
+        label == null ||
+        label.isEmpty ||
+        label == 'Getting location...' ||
+        label == 'Location unavailable') {
+      return null;
+    }
+
+    return label;
+  }
 
   @override
   void initState() {
@@ -61,7 +80,16 @@ class _NewPostScreenState extends State<NewPostScreen> {
     _selectedImagePaths.addAll(widget.initialImagePaths);
     _locationLabel = widget.initialLocationLabel;
     _coordinateLabel = widget.initialCoordinateLabel;
+    _locationPoint = widget.initialLocationPoint;
     _controller.addListener(() => setState(() {}));
+
+    if (_locationCheckInEnabled &&
+        (_locationLabel?.trim().isNotEmpty != true ||
+            _coordinateLabel?.trim().isNotEmpty != true)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _fetchCurrentLocation();
+      });
+    }
   }
 
   @override
@@ -79,8 +107,13 @@ class _NewPostScreenState extends State<NewPostScreen> {
         body: _controller.text,
         topic: _selectedTopic,
         allowReplies: _allowReplies,
-        city: _locationLabel,
+        city: _postCityLabel,
         imagePaths: List<String>.of(_selectedImagePaths),
+        locationEnabled: _locationCheckInEnabled,
+        locationLabel: _postCityLabel,
+        coordinateLabel: _coordinateLabel,
+        locationLatitude: _locationPoint?.latitude,
+        locationLongitude: _locationPoint?.longitude,
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -126,6 +159,148 @@ class _NewPostScreenState extends State<NewPostScreen> {
 
   void _removeSelectedImage(String path) {
     setState(() => _selectedImagePaths.remove(path));
+  }
+
+  void _toggleLocationCheckIn() {
+    if (_locationCheckInEnabled) {
+      setState(() => _locationCheckInEnabled = false);
+      return;
+    }
+
+    setState(() => _locationCheckInEnabled = true);
+    _fetchCurrentLocation();
+  }
+
+  Future<void> _fetchCurrentLocation() async {
+    if (_isLocating) return;
+
+    setState(() {
+      _isLocating = true;
+      _locationLabel = 'Getting location...';
+      _coordinateLabel = null;
+      _locationPoint = null;
+    });
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _setLocationUnavailable('Aktifkan layanan lokasi untuk check-in.');
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied) {
+        _setLocationUnavailable('Izin lokasi belum diberikan.');
+        return;
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        _setLocationUnavailable('Izin lokasi diblokir. Ubah lewat pengaturan.');
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      final label = await _getPlaceLabel(position);
+
+      if (!mounted) return;
+      setState(() {
+        _locationLabel = label;
+        _coordinateLabel = _coordinateLabelFor(position);
+        _locationPoint = LatLng(position.latitude, position.longitude);
+      });
+    } catch (_) {
+      _setLocationUnavailable('Tidak bisa mengambil lokasi saat ini.');
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
+    }
+  }
+
+  void _setLocationUnavailable(String message) {
+    if (!mounted) return;
+    setState(() {
+      _locationLabel = 'Location unavailable';
+      _coordinateLabel = null;
+      _locationPoint = null;
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<String> _getPlaceLabel(Position position) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      ).timeout(const Duration(seconds: 8));
+
+      if (placemarks.isEmpty) {
+        return _formatCoordinates(position.latitude, position.longitude);
+      }
+
+      return _formatTwoLevelPlace(placemarks.first) ??
+          _formatCoordinates(position.latitude, position.longitude);
+    } catch (_) {
+      return _formatCoordinates(position.latitude, position.longitude);
+    }
+  }
+
+  String? _formatTwoLevelPlace(Placemark placemark) {
+    final levels =
+        <String?>[
+              placemark.thoroughfare,
+              placemark.street,
+              placemark.subLocality,
+              placemark.locality,
+              placemark.subAdministrativeArea,
+              placemark.administrativeArea,
+            ]
+            .where(_hasAddressValue)
+            .map((value) => _cleanAddressValue(value!))
+            .toList();
+
+    final uniqueLevels = <String>[];
+    for (final level in levels) {
+      final alreadyIncluded = uniqueLevels.any(
+        (item) => item.toLowerCase() == level.toLowerCase(),
+      );
+      if (!alreadyIncluded) uniqueLevels.add(level);
+      if (uniqueLevels.length == 2) break;
+    }
+
+    if (uniqueLevels.isEmpty) return null;
+    return uniqueLevels.join(', ');
+  }
+
+  bool _hasAddressValue(String? value) {
+    return value != null && _cleanAddressValue(value).isNotEmpty;
+  }
+
+  String _cleanAddressValue(String value) {
+    return value.trim().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  String _formatCoordinates(double latitude, double longitude) {
+    final latDirection = latitude >= 0 ? 'N' : 'S';
+    final lngDirection = longitude >= 0 ? 'E' : 'W';
+    final lat = latitude.abs().toStringAsFixed(5);
+    final lng = longitude.abs().toStringAsFixed(5);
+
+    return '$lat° $latDirection, $lng° $lngDirection';
+  }
+
+  String _coordinateLabelFor(Position position) {
+    return '${position.latitude.toStringAsFixed(5)}, '
+        '${position.longitude.toStringAsFixed(5)}';
   }
 
   @override
@@ -214,14 +389,12 @@ class _NewPostScreenState extends State<NewPostScreen> {
                                   locationCheckInEnabled:
                                       _locationCheckInEnabled,
                                   onImageTap: _openImageAttachmentChooser,
-                                  onLocationCheckInTap: () => setState(
-                                    () => _locationCheckInEnabled =
-                                        !_locationCheckInEnabled,
-                                  ),
+                                  onLocationCheckInTap: _toggleLocationCheckIn,
                                 ),
                                 const SizedBox(height: 12),
                                 AttachmentMediaStrip(
                                   locationEnabled: _locationCheckInEnabled,
+                                  locationLoading: _isLocating,
                                   locationLabel: _locationLabel,
                                   coordinateLabel: _coordinateLabel,
                                   imagePaths: _selectedImagePaths,

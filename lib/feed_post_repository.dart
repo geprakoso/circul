@@ -29,12 +29,19 @@ class FeedPostRepository {
     required bool allowReplies,
     String? city,
     List<String> imagePaths = const [],
+    bool locationEnabled = false,
+    String? locationLabel,
+    String? coordinateLabel,
+    double? locationLatitude,
+    double? locationLongitude,
   }) async {
     final db = await _database.database;
     final now = DateTime.now().millisecondsSinceEpoch;
     final cleanBody = body.trim();
     final cleanTopic = topic.trim();
     final cleanCity = city?.trim();
+    final cleanLocationLabel = locationLabel?.trim();
+    final cleanCoordinateLabel = coordinateLabel?.trim();
 
     await db.insert(CirculDatabase.feedPostsTable, {
       'id': 'local_$now',
@@ -43,8 +50,17 @@ class FeedPostRepository {
       'time_ago': 'Baru saja',
       'title': cleanTopic.isEmpty ? 'Update komunitas' : cleanTopic,
       'body': cleanBody,
-      'image_asset': imagePaths.isEmpty ? cleanupAsset : '',
+      'image_asset': imagePaths.isEmpty && !locationEnabled ? cleanupAsset : '',
       'image_paths': jsonEncode(imagePaths),
+      'location_enabled': locationEnabled ? 1 : 0,
+      'location_label': cleanLocationLabel?.isNotEmpty == true
+          ? cleanLocationLabel
+          : null,
+      'coordinate_label': cleanCoordinateLabel?.isNotEmpty == true
+          ? cleanCoordinateLabel
+          : null,
+      'location_latitude': locationLatitude,
+      'location_longitude': locationLongitude,
       'likes': 0,
       'comments': 0,
       'topic': cleanTopic.isEmpty ? null : cleanTopic,
@@ -78,6 +94,11 @@ class FeedPostRepository {
         'body': post.body,
         'image_asset': post.imageAsset,
         'image_paths': jsonEncode(post.imagePaths),
+        'location_enabled': post.locationEnabled ? 1 : 0,
+        'location_label': post.locationLabel,
+        'coordinate_label': post.coordinateLabel,
+        'location_latitude': post.locationLatitude,
+        'location_longitude': post.locationLongitude,
         'likes': post.likes,
         'comments': post.comments,
         'topic': post.topic.isEmpty ? null : post.topic,
@@ -103,9 +124,20 @@ class FeedPostRepository {
       createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
       topic: (row['topic'] as String?) ?? '',
       imagePaths: _imagePathsFromRow(row['image_paths']),
+      locationEnabled: row['location_enabled'] == 1,
+      locationLabel: row['location_label'] as String?,
+      coordinateLabel: row['coordinate_label'] as String?,
+      locationLatitude: _doubleFromRow(row['location_latitude']),
+      locationLongitude: _doubleFromRow(row['location_longitude']),
       likes: row['likes'] as int,
       comments: row['comments'] as int,
     );
+  }
+
+  double? _doubleFromRow(Object? value) {
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    return null;
   }
 
   List<String> _imagePathsFromRow(Object? value) {

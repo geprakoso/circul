@@ -185,6 +185,7 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
           initialLocationCheckInEnabled: true,
           initialLocationLabel: _locationLabelForPost(selectedPoint),
           initialCoordinateLabel: _coordinateLabel(selectedPoint),
+          initialLocationPoint: selectedPoint,
         ),
       ),
     );
