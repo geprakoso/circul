@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'core/constants.dart';
 import 'event/event_screen.dart';
@@ -53,12 +54,42 @@ class CirculShell extends StatefulWidget {
 
 class _CirculShellState extends State<CirculShell> {
   var _index = 0;
+  final _issueClusters = <MapIssueCluster>[];
+
+  void _addHeatmapLevel(LatLng point) {
+    setState(() {
+      final clusterIndex = _issueClusters.indexWhere(
+        (cluster) => MapScreen.distanceMeters(cluster.point, point) <= 75,
+      );
+
+      if (clusterIndex == -1) {
+        _issueClusters.add(MapIssueCluster(point: point));
+      } else {
+        final cluster = _issueClusters[clusterIndex];
+        final nextCount = cluster.count + 1;
+        _issueClusters[clusterIndex] = cluster.copyWith(
+          point: LatLng(
+            (cluster.point.latitude * cluster.count + point.latitude) /
+                nextCount,
+            (cluster.point.longitude * cluster.count + point.longitude) /
+                nextCount,
+          ),
+          count: nextCount,
+        );
+      }
+
+      _index = 1;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final screens = [
-      HomeScreen(feedPostRepository: widget.feedPostRepository),
-      const MapScreen(),
+      HomeScreen(
+        feedPostRepository: widget.feedPostRepository,
+        onDownCheckIn: _addHeatmapLevel,
+      ),
+      MapScreen(issueClusters: _issueClusters, onDownCheckIn: _addHeatmapLevel),
       const SearchScreen(),
       const EventScreen(),
       const ProfileScreen(),

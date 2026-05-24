@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/constants.dart';
 
@@ -14,10 +15,12 @@ class CaptureResultScreen extends StatefulWidget {
   const CaptureResultScreen({
     super.key,
     this.imagePath,
+    this.onDownSelected,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
 
   final String? imagePath;
+  final ValueChanged<LatLng>? onDownSelected;
   final ImagePicker? _imagePicker;
 
   @override
@@ -29,6 +32,7 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
   late final ImagePicker _imagePicker;
   late String? _imagePath;
   late DateTime _capturedAt;
+  LatLng? _capturedPoint;
   var _locationText = 'Getting location...';
 
   @override
@@ -50,6 +54,9 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
 
   void _selectChoice(_ConditionChoice choice) {
     setState(() => _selectedChoice = choice);
+    if (choice == _ConditionChoice.down) {
+      _addDownHeatmapLevel();
+    }
   }
 
   void _showPlaceholderMessage(String message) {
@@ -80,16 +87,19 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
   }
 
   Future<void> _loadCurrentLocation() async {
-    final locationText = await _getCurrentLocationLabel();
+    final location = await _getCurrentLocation();
     if (!mounted) return;
 
-    setState(() => _locationText = locationText);
+    setState(() {
+      _capturedPoint = location.point;
+      _locationText = location.label;
+    });
   }
 
-  Future<String> _getCurrentLocationLabel() async {
+  Future<_CaptureLocation> _getCurrentLocation() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return 'Location unavailable';
+      if (!serviceEnabled) return const _CaptureLocation.unavailable();
 
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -98,7 +108,7 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        return 'Location unavailable';
+        return const _CaptureLocation.unavailable();
       }
 
       final position = await Geolocator.getCurrentPosition(
@@ -108,10 +118,36 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
         ),
       );
 
-      return await _getPlaceLabel(position);
+      return _CaptureLocation(
+        point: LatLng(position.latitude, position.longitude),
+        label: await _getPlaceLabel(position),
+      );
     } catch (_) {
-      return 'Location unavailable';
+      return const _CaptureLocation.unavailable();
     }
+  }
+
+  Future<void> _addDownHeatmapLevel() async {
+    var point = _capturedPoint;
+    if (point == null) {
+      setState(() => _locationText = 'Getting location...');
+      final location = await _getCurrentLocation();
+      if (!mounted) return;
+
+      point = location.point;
+      setState(() {
+        _capturedPoint = point;
+        _locationText = location.label;
+      });
+    }
+
+    if (point == null) {
+      _showPlaceholderMessage('Lokasi belum tersedia untuk heatmap.');
+      return;
+    }
+
+    widget.onDownSelected?.call(point);
+    if (mounted) Navigator.of(context).pop();
   }
 
   Future<String> _getPlaceLabel(Position position) async {
@@ -822,6 +858,17 @@ class _ExamplesButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CaptureLocation {
+  const _CaptureLocation({required this.point, required this.label});
+
+  const _CaptureLocation.unavailable()
+    : point = null,
+      label = 'Location unavailable';
+
+  final LatLng? point;
+  final String label;
 }
 
 enum _ConditionChoice { up, down }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../check_in/capture_result_screen.dart';
 import '../comments/comment_screen.dart';
@@ -14,10 +15,12 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
     this.feedPostRepository,
+    this.onDownCheckIn,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
 
   final FeedPostRepository? feedPostRepository;
+  final ValueChanged<LatLng>? onDownCheckIn;
   final ImagePicker? _imagePicker;
 
   @override
@@ -70,7 +73,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (context) => CaptureResultScreen(imagePath: image.path),
+          builder: (context) => CaptureResultScreen(
+            imagePath: image.path,
+            onDownSelected: widget.onDownCheckIn,
+          ),
         ),
       );
     } on PlatformException catch (_) {

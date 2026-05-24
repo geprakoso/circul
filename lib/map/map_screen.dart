@@ -17,7 +17,18 @@ const _osmUserAgentPackageName = String.fromEnvironment(
 );
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({
+    super.key,
+    this.issueClusters = const [],
+    this.onDownCheckIn,
+  });
+
+  final List<MapIssueCluster> issueClusters;
+  final ValueChanged<LatLng>? onDownCheckIn;
+
+  static double distanceMeters(LatLng first, LatLng second) {
+    return const Distance().as(LengthUnit.Meter, first, second);
+  }
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -68,22 +79,29 @@ class _MapScreenState extends State<MapScreen>
               userAgentPackageName: _osmUserAgentPackageName,
               maxNativeZoom: 19,
             ),
-            CircleLayer(circles: _impactCircles()),
+            CircleLayer(circles: _clusterGlows(widget.issueClusters)),
             MarkerLayer(
               markers: [
                 Marker(
                   point: _currentLocation,
-                  width: 72,
-                  height: 72,
+                  width: 54,
+                  height: 54,
                   child: const _CurrentLocationMarker(),
                 ),
                 for (final activity in _mapActivities)
                   Marker(
                     point: activity.point,
-                    width: 52,
-                    height: 52,
+                    width: 42,
+                    height: 42,
                     alignment: Alignment.topCenter,
                     child: _ActivityMarker(activity: activity),
+                  ),
+                for (final cluster in widget.issueClusters)
+                  Marker(
+                    point: cluster.point,
+                    width: _clusterMarkerSizeForCount(cluster.count) + 8,
+                    height: _clusterMarkerSizeForCount(cluster.count) + 8,
+                    child: _IssueQuantityMarker(cluster: cluster),
                   ),
               ],
             ),
@@ -96,16 +114,16 @@ class _MapScreenState extends State<MapScreen>
           ],
         ),
         Positioned(
-          right: 20,
-          bottom: 22,
+          right: 16,
+          bottom: 18,
           child: _LocateButton(
             isLoading: _isLocating,
             onPressed: _centerToCurrentLocation,
           ),
         ),
         Positioned(
-          right: 20,
-          bottom: 96,
+          right: 16,
+          bottom: 78,
           child: _FlagActionMenu(
             expanded: _flagMenuExpanded,
             onToggle: () =>
@@ -194,7 +212,8 @@ class _MapScreenState extends State<MapScreen>
     setState(() => _flagMenuExpanded = false);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => const CaptureResultScreen(),
+        builder: (context) =>
+            CaptureResultScreen(onDownSelected: widget.onDownCheckIn),
       ),
     );
   }
@@ -229,6 +248,26 @@ class _MapScreenState extends State<MapScreen>
   }
 }
 
+class MapIssueCluster {
+  const MapIssueCluster({
+    required this.point,
+    this.count = 1,
+    this.radiusMeters = 68,
+  });
+
+  final LatLng point;
+  final int count;
+  final double radiusMeters;
+
+  MapIssueCluster copyWith({LatLng? point, int? count, double? radiusMeters}) {
+    return MapIssueCluster(
+      point: point ?? this.point,
+      count: count ?? this.count,
+      radiusMeters: radiusMeters ?? this.radiusMeters,
+    );
+  }
+}
+
 class _LatLngTween extends Tween<LatLng> {
   _LatLngTween({required super.begin, required super.end});
 
@@ -257,26 +296,26 @@ class _LocateButton extends StatelessWidget {
       label: 'Pusatkan ke lokasi saat ini',
       child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        elevation: 7,
-        shadowColor: const Color(0x33000000),
+        borderRadius: BorderRadius.circular(14),
+        elevation: 4,
+        shadowColor: const Color(0x26000000),
         child: InkWell(
           onTap: isLoading ? null : onPressed,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           child: SizedBox(
-            width: 62,
-            height: 62,
+            width: 48,
+            height: 48,
             child: Center(
               child: isLoading
                   ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 3),
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
                     )
                   : const Icon(
                       Icons.my_location_rounded,
                       color: Color(0xFF777777),
-                      size: 34,
+                      size: 26,
                     ),
             ),
           ),
@@ -301,8 +340,8 @@ class _FlagActionMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const buttonSize = 62.0;
-    const actionWidth = 138.0;
+    const buttonSize = 48.0;
+    const actionWidth = 106.0;
     const expandedWidth = buttonSize + actionWidth * 2;
     const animationDuration = Duration(milliseconds: 320);
     const animationCurve = Curves.easeOutCubic;
@@ -313,15 +352,15 @@ class _FlagActionMenu extends StatelessWidget {
         duration: animationDuration,
         curve: animationCurve,
         width: expanded ? expandedWidth : buttonSize,
-        height: 62,
+        height: buttonSize,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x33000000),
-              blurRadius: 16,
-              offset: Offset(0, 8),
+              color: Color(0x26000000),
+              blurRadius: 10,
+              offset: Offset(0, 4),
             ),
           ],
         ),
@@ -382,7 +421,7 @@ class _FlagActionMenu extends StatelessWidget {
                   child: Icon(
                     Icons.flag_outlined,
                     color: expanded ? Colors.white : const Color(0xFF777777),
-                    size: 34,
+                    size: 25,
                   ),
                 ),
               ),
@@ -414,22 +453,22 @@ class _FlagMenuAction extends StatelessWidget {
     return InkWell(
       onTap: onPressed,
       child: Container(
-        width: 138,
-        height: 62,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        width: 106,
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         color: backgroundColor,
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 26),
-              const SizedBox(width: 8),
+              Icon(icon, color: color, size: 19),
+              const SizedBox(width: 5),
               Text(
                 label,
                 style: TextStyle(
                   color: color,
-                  fontSize: 17,
+                  fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -441,36 +480,90 @@ class _FlagMenuAction extends StatelessWidget {
   }
 }
 
-List<CircleMarker> _impactCircles() {
+List<CircleMarker> _clusterGlows(List<MapIssueCluster> issueClusters) {
   return [
     for (final spot in _impactSpots) ...[
       CircleMarker(
         point: spot.point,
         radius: spot.radiusMeters * 1.9,
         useRadiusInMeter: true,
-        color: const Color(0xFF5B4BFF).withValues(alpha: .22),
+        color: _heatmapColorForIntensity(spot.intensity).withValues(alpha: .17),
       ),
       CircleMarker(
         point: spot.point,
         radius: spot.radiusMeters * 1.35,
         useRadiusInMeter: true,
-        color: Colors.greenAccent.withValues(alpha: .34),
+        color: _heatmapColorForIntensity(
+          spot.intensity * .72,
+        ).withValues(alpha: .28),
       ),
       CircleMarker(
         point: spot.point,
         radius: spot.radiusMeters * .82,
         useRadiusInMeter: true,
-        color: Colors.yellow.withValues(alpha: spot.intensity * .46),
+        color: _heatmapColorForIntensity(spot.intensity).withValues(alpha: .46),
       ),
-      if (spot.intensity > .72)
-        CircleMarker(
-          point: spot.point,
-          radius: spot.radiusMeters * .48,
-          useRadiusInMeter: true,
-          color: Colors.redAccent.withValues(alpha: spot.intensity * .62),
-        ),
+      CircleMarker(
+        point: spot.point,
+        radius: spot.radiusMeters * .48,
+        useRadiusInMeter: true,
+        color: _heatmapColorForIntensity(
+          spot.intensity,
+        ).withValues(alpha: spot.intensity.clamp(.32, .72)),
+      ),
+    ],
+    for (final cluster in issueClusters) ...[
+      CircleMarker(
+        point: cluster.point,
+        radius: _clusterGlowRadiusForCount(cluster.count),
+        useRadiusInMeter: true,
+        color: _clusterColorForCount(cluster.count).withValues(alpha: .16),
+      ),
+      CircleMarker(
+        point: cluster.point,
+        radius: _clusterGlowRadiusForCount(cluster.count) * .66,
+        useRadiusInMeter: true,
+        color: _clusterColorForCount(cluster.count).withValues(alpha: .26),
+      ),
+      CircleMarker(
+        point: cluster.point,
+        radius: _clusterGlowRadiusForCount(cluster.count) * .36,
+        useRadiusInMeter: true,
+        color: _clusterColorForCount(cluster.count).withValues(alpha: .42),
+      ),
     ],
   ];
+}
+
+Color _clusterColorForCount(int count) {
+  if (count <= 2) return const Color(0xFF22C55E);
+  if (count <= 5) return const Color(0xFFF59E0B);
+  return const Color(0xFFEF4444);
+}
+
+double _clusterGlowRadiusForCount(int count) {
+  return (36 + count * 5).clamp(42, 86).toDouble();
+}
+
+double _clusterMarkerSizeForCount(int count) {
+  return (34 + count * 2).clamp(36, 52).toDouble();
+}
+
+Color _heatmapColorForIntensity(double intensity) {
+  final value = intensity.clamp(0, 1);
+  if (value < .5) {
+    return Color.lerp(
+      const Color(0xFF21C45D),
+      const Color(0xFFFACC15),
+      value / .5,
+    )!;
+  }
+
+  return Color.lerp(
+    const Color(0xFFFACC15),
+    const Color(0xFFEF4444),
+    (value - .5) / .5,
+  )!;
 }
 
 class _CurrentLocationMarker extends StatelessWidget {
@@ -491,14 +584,63 @@ class _CurrentLocationMarker extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF22C77A),
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 3),
+          border: Border.all(color: Colors.white, width: 2.5),
           boxShadow: const [
             BoxShadow(
-              color: Color(0x33000000),
-              blurRadius: 8,
-              offset: Offset(0, 3),
+              color: Color(0x26000000),
+              blurRadius: 6,
+              offset: Offset(0, 2),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IssueQuantityMarker extends StatelessWidget {
+  const _IssueQuantityMarker({required this.cluster});
+
+  final MapIssueCluster cluster;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _clusterColorForCount(cluster.count);
+    final size = _clusterMarkerSizeForCount(cluster.count);
+
+    return Center(
+      child: Semantics(
+        label: '${cluster.count} laporan lingkungan turun',
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x26000000),
+                blurRadius: 8,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                cluster.count.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -518,14 +660,14 @@ class _ActivityMarker extends StatelessWidget {
         shape: BoxShape.circle,
         boxShadow: const [
           BoxShadow(
-            color: Color(0x26000000),
-            blurRadius: 10,
-            offset: Offset(0, 4),
+            color: Color(0x1F000000),
+            blurRadius: 7,
+            offset: Offset(0, 3),
           ),
         ],
-        border: Border.all(color: activity.color, width: 3),
+        border: Border.all(color: activity.color, width: 2),
       ),
-      child: Icon(activity.icon, color: activity.color, size: 25),
+      child: Icon(activity.icon, color: activity.color, size: 20),
     );
   }
 }
