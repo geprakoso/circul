@@ -1,11 +1,15 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../check_in/capture_result_screen.dart';
-import '../core/constants.dart';
 import '../feed_post_repository.dart';
+import '../mock_data.dart';
+import '../shared/relative_timestamp.dart';
 
 const _gondangManisCenter = LatLng(-7.5584, 110.8199);
 const _osmTileTemplate = String.fromEnvironment(
@@ -25,6 +29,7 @@ class MapScreen extends StatefulWidget {
     this.feedPostRepository,
     this.onPostCreated,
     this.focusedCheckIn,
+    this.currentLocationRefreshToken = 0,
   });
 
   final List<MapIssueCluster> issueClusters;
@@ -32,6 +37,7 @@ class MapScreen extends StatefulWidget {
   final FeedPostRepository? feedPostRepository;
   final VoidCallback? onPostCreated;
   final MapFocusedCheckIn? focusedCheckIn;
+  final int currentLocationRefreshToken;
 
   static double distanceMeters(LatLng first, LatLng second) {
     return const Distance().as(LengthUnit.Meter, first, second);
@@ -43,24 +49,34 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen>
     with SingleTickerProviderStateMixin {
+  static const _visibleBoundsRefreshDelay = Duration(milliseconds: 280);
+
   final _mapController = MapController();
   late final AnimationController _cameraAnimationController;
+  late final FeedPostRepository _repository;
   var _currentLocation = _gondangManisCenter;
   var _isLocating = false;
+  var _isResolvingLocation = false;
   var _flagMenuExpanded = false;
+  var _feedCheckIns = <FeedPost>[];
+  DateTime? _lastResolvedLocationAt;
+  Timer? _visibleBoundsRefreshTimer;
   LatLngBounds? _visibleBounds;
 
   @override
   void initState() {
     super.initState();
+    _repository = widget.feedPostRepository ?? FeedPostRepository();
     _cameraAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
+    _loadFeedCheckIns();
   }
 
   @override
   void dispose() {
+    _visibleBoundsRefreshTimer?.cancel();
     _cameraAnimationController.dispose();
     _mapController.dispose();
     super.dispose();
@@ -76,6 +92,19 @@ class _MapScreenState extends State<MapScreen>
         if (!mounted) return;
         setState(() => _flagMenuExpanded = false);
         _animateMapTo(focusedCheckIn.point, 17);
+      });
+    }
+
+    if (widget.currentLocationRefreshToken !=
+        oldWidget.currentLocationRefreshToken) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _loadFeedCheckIns();
+        _centerToCurrentLocation(
+          preferLastKnown: true,
+          showErrors: false,
+          showLoading: false,
+        );
       });
     }
   }
@@ -97,8 +126,7 @@ class _MapScreenState extends State<MapScreen>
               flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
             ),
             onMapReady: _syncVisibleBounds,
-            onPositionChanged: (camera, hasGesture) =>
-                _syncVisibleBounds(camera),
+            onPositionChanged: _scheduleVisibleBoundsSync,
           ),
           children: [
             TileLayer(
@@ -123,6 +151,15 @@ class _MapScreenState extends State<MapScreen>
                     alignment: Alignment.topCenter,
                     child: _ActivityMarker(activity: activity),
                   ),
+                for (final post in _feedCheckIns)
+                  if (post.locationPoint case final point?)
+                    Marker(
+                      point: point,
+                      width: 46,
+                      height: 46,
+                      alignment: Alignment.topCenter,
+                      child: const _FeedPostCheckInMarker(),
+                    ),
                 for (final cluster in widget.issueClusters)
                   Marker(
                     point: cluster.point,
@@ -153,7 +190,7 @@ class _MapScreenState extends State<MapScreen>
           bottom: 192,
           child: _LocateButton(
             isLoading: _isLocating,
-            onPressed: _centerToCurrentLocation,
+            onPressed: () => _centerToCurrentLocation(),
           ),
         ),
         Positioned(
@@ -175,11 +212,34 @@ class _MapScreenState extends State<MapScreen>
     );
   }
 
+  Future<void> _loadFeedCheckIns() async {
+    try {
+      final posts = await _repository.getPosts();
+      if (!mounted) return;
+
+      setState(() {
+        _feedCheckIns = posts
+            .where((post) => post.locationEnabled && post.locationPoint != null)
+            .toList(growable: false);
+      });
+    } catch (_) {
+      if (mounted) setState(() => _feedCheckIns = const []);
+    }
+  }
+
   void _syncVisibleBounds([MapCamera? camera]) {
+    _visibleBoundsRefreshTimer?.cancel();
     final nextBounds =
         camera?.visibleBounds ?? _mapController.camera.visibleBounds;
     if (!mounted) return;
     setState(() => _visibleBounds = nextBounds);
+  }
+
+  void _scheduleVisibleBoundsSync(MapCamera camera, bool hasGesture) {
+    _visibleBoundsRefreshTimer?.cancel();
+    _visibleBoundsRefreshTimer = Timer(_visibleBoundsRefreshDelay, () {
+      _syncVisibleBounds(camera);
+    });
   }
 
   List<_VisibleCheckIn> _visibleCheckIns() {
@@ -192,6 +252,13 @@ class _MapScreenState extends State<MapScreen>
           focusedCheckIn: focusedCheckIn,
           currentLocation: distanceAnchor,
         ),
+      for (final post in _feedCheckIns)
+        if (post.locationPoint case final point?)
+          _VisibleCheckIn.fromFeedPost(
+            post: post,
+            point: point,
+            currentLocation: distanceAnchor,
+          ),
       for (var i = 0; i < widget.issueClusters.length; i++)
         _VisibleCheckIn.fromCluster(
           cluster: widget.issueClusters[i],
@@ -218,41 +285,78 @@ class _MapScreenState extends State<MapScreen>
     return visibleItems;
   }
 
-  Future<void> _centerToCurrentLocation() async {
-    if (_isLocating) return;
+  Future<void> _centerToCurrentLocation({
+    bool preferLastKnown = false,
+    bool showErrors = true,
+    bool showLoading = true,
+  }) async {
+    if (_isResolvingLocation) return;
 
-    setState(() => _isLocating = true);
+    final lastResolvedLocationAt = _lastResolvedLocationAt;
+    final hasFreshLocation =
+        lastResolvedLocationAt != null &&
+        DateTime.now().difference(lastResolvedLocationAt) <
+            const Duration(minutes: 2);
+    if (preferLastKnown && hasFreshLocation) {
+      _animateMapTo(_currentLocation, 17);
+      return;
+    }
+
+    setState(() {
+      _isResolvingLocation = true;
+      _isLocating = showLoading;
+    });
 
     try {
-      final permissionGranted = await _ensureLocationPermission();
+      final permissionGranted = await _ensureLocationPermission(
+        showErrors: showErrors,
+      );
       if (!permissionGranted) return;
 
+      if (preferLastKnown) {
+        final lastKnownPosition = await Geolocator.getLastKnownPosition();
+        if (lastKnownPosition != null && mounted) {
+          _applyCurrentLocation(lastKnownPosition, animate: true);
+        }
+      }
+
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 12),
+        locationSettings: LocationSettings(
+          accuracy: preferLastKnown
+              ? LocationAccuracy.medium
+              : LocationAccuracy.high,
+          timeLimit: Duration(seconds: 10),
         ),
       );
-      final point = LatLng(position.latitude, position.longitude);
-
-      if (!mounted) return;
-
-      setState(() => _currentLocation = point);
-      _animateMapTo(point, 17);
+      if (mounted) _applyCurrentLocation(position, animate: true);
     } catch (_) {
       if (!mounted) return;
-      _showLocationMessage('Tidak bisa mengambil lokasi saat ini.');
+      if (showErrors) {
+        _showLocationMessage('Tidak bisa mengambil lokasi saat ini.');
+      }
     } finally {
       if (mounted) {
-        setState(() => _isLocating = false);
+        setState(() {
+          _isResolvingLocation = false;
+          _isLocating = false;
+        });
       }
     }
   }
 
-  Future<bool> _ensureLocationPermission() async {
+  void _applyCurrentLocation(Position position, {required bool animate}) {
+    final point = LatLng(position.latitude, position.longitude);
+    setState(() {
+      _currentLocation = point;
+      _lastResolvedLocationAt = DateTime.now();
+    });
+    if (animate) _animateMapTo(point, 17);
+  }
+
+  Future<bool> _ensureLocationPermission({bool showErrors = true}) async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      if (mounted) {
+      if (mounted && showErrors) {
         _showLocationMessage(
           'Aktifkan layanan lokasi untuk memakai tombol ini.',
         );
@@ -266,14 +370,14 @@ class _MapScreenState extends State<MapScreen>
     }
 
     if (permission == LocationPermission.denied) {
-      if (mounted) {
+      if (mounted && showErrors) {
         _showLocationMessage('Izin lokasi belum diberikan.');
       }
       return false;
     }
 
     if (permission == LocationPermission.deniedForever) {
-      if (mounted) {
+      if (mounted && showErrors) {
         _showLocationMessage(
           'Izin lokasi diblokir. Ubah lewat pengaturan app.',
         );
@@ -300,7 +404,9 @@ class _MapScreenState extends State<MapScreen>
         ),
       ),
     );
-    if (didPost == true) widget.onPostCreated?.call();
+    if (didPost != true) return;
+    await _loadFeedCheckIns();
+    widget.onPostCreated?.call();
   }
 
   void _animateMapTo(LatLng center, double zoom) {
@@ -340,6 +446,10 @@ class MapFocusedCheckIn {
     required this.label,
     this.coordinateLabel,
     this.caption,
+    this.author = 'sarahmae',
+    this.timeLabel = 'Baru saja',
+    this.imageAsset = '',
+    this.imagePaths = const [],
   });
 
   final int id;
@@ -347,6 +457,10 @@ class MapFocusedCheckIn {
   final String label;
   final String? coordinateLabel;
   final String? caption;
+  final String author;
+  final String timeLabel;
+  final String imageAsset;
+  final List<String> imagePaths;
 }
 
 class MapIssueCluster {
@@ -372,12 +486,16 @@ class MapIssueCluster {
 class _VisibleCheckIn {
   const _VisibleCheckIn({
     required this.point,
+    required this.author,
+    required this.timeLabel,
     required this.title,
     required this.subtitle,
     required this.meta,
     required this.color,
     required this.icon,
     required this.distanceMeters,
+    this.imageAsset = '',
+    this.imagePaths = const [],
     this.isFocused = false,
   });
 
@@ -392,13 +510,42 @@ class _VisibleCheckIn {
 
     return _VisibleCheckIn(
       point: focusedCheckIn.point,
+      author: focusedCheckIn.author,
+      timeLabel: focusedCheckIn.timeLabel,
       title: focusedCheckIn.label,
       subtitle: focusedCheckIn.caption ?? 'Submitted check-in',
       meta: focusedCheckIn.coordinateLabel ?? _distanceLabel(distanceMeters),
       color: kCirculGreen,
       icon: Icons.flag_rounded,
       distanceMeters: distanceMeters,
+      imageAsset: focusedCheckIn.imageAsset,
+      imagePaths: focusedCheckIn.imagePaths,
       isFocused: true,
+    );
+  }
+
+  factory _VisibleCheckIn.fromFeedPost({
+    required FeedPost post,
+    required LatLng point,
+    required LatLng currentLocation,
+  }) {
+    final distanceMeters = MapScreen.distanceMeters(currentLocation, point);
+    final timestamp = post.createdAt == null
+        ? post.timeAgo
+        : formatRelativeTimestamp(post.createdAt!);
+
+    return _VisibleCheckIn(
+      point: point,
+      author: post.author,
+      timeLabel: timestamp,
+      title: post.locationLabel ?? post.city,
+      subtitle: post.body,
+      meta: _distanceLabel(distanceMeters),
+      color: kCirculGreen,
+      icon: Icons.flag_rounded,
+      distanceMeters: distanceMeters,
+      imageAsset: post.imageAsset,
+      imagePaths: post.imagePaths,
     );
   }
 
@@ -414,6 +561,8 @@ class _VisibleCheckIn {
 
     return _VisibleCheckIn(
       point: cluster.point,
+      author: 'Circul',
+      timeLabel: _distanceLabel(distanceMeters),
       title: cluster.count == 1
           ? 'Check-in lingkungan turun'
           : '${cluster.count} check-in lingkungan turun',
@@ -438,6 +587,8 @@ class _VisibleCheckIn {
 
     return _VisibleCheckIn(
       point: spot.point,
+      author: 'Circul',
+      timeLabel: _distanceLabel(distanceMeters),
       title: 'Titik check-in #${index + 1}',
       subtitle: 'Aktivitas terdeteksi di area map',
       meta: '${_distanceLabel(distanceMeters)} • $intensityPercent%',
@@ -448,13 +599,26 @@ class _VisibleCheckIn {
   }
 
   final LatLng point;
+  final String author;
+  final String timeLabel;
   final String title;
   final String subtitle;
   final String meta;
   final Color color;
   final IconData icon;
   final double distanceMeters;
+  final String imageAsset;
+  final List<String> imagePaths;
   final bool isFocused;
+
+  int get imageCount => imagePaths.length + (imageAsset.isEmpty ? 0 : 1);
+
+  List<_CheckInPreviewMedia> get previewMedia {
+    return [
+      if (imageAsset.isNotEmpty) _CheckInPreviewMedia.asset(imageAsset),
+      for (final path in imagePaths) _CheckInPreviewMedia.file(path),
+    ];
+  }
 }
 
 class _LatLngTween extends Tween<LatLng> {
@@ -766,8 +930,14 @@ class _CheckInBottomSheet extends StatelessWidget {
               if (items.isEmpty)
                 const _EmptyCheckInResult()
               else
-                for (final item in items)
-                  _CheckInResultTile(item: item, onTap: () => onItemTap(item)),
+                for (var i = 0; i < items.length; i++) ...[
+                  _CheckInResultTile(
+                    item: items[i],
+                    onTap: () => onItemTap(items[i]),
+                  ),
+                  if (i < items.length - 1)
+                    const Divider(height: 1, color: kLine),
+                ],
             ],
           ),
         );
@@ -824,57 +994,112 @@ class _CheckInResultTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bodyText = item.subtitle;
+    final locationText = item.title;
+    final previewItems = item.previewMedia.take(2).toList(growable: false);
+    final previewSlots = previewItems.isEmpty
+        ? const <_CheckInPreviewMedia?>[null, null]
+        : previewItems;
+
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.fromLTRB(0, 18, 0, 20),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: item.color.withValues(alpha: .12),
+              width: 54,
+              height: 54,
+              decoration: const BoxDecoration(
+                color: Color(0xFFD9D9D9),
                 shape: BoxShape.circle,
               ),
-              child: Icon(item.icon, color: item.color, size: 20),
+              child: ClipOval(
+                child: Image.asset(
+                  avatarAsset,
+                  width: 54,
+                  height: 54,
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 18),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          item.author,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        item.timeLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF9A9A9A),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
                   Text(
-                    item.title,
-                    maxLines: 1,
+                    bodyText,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: kInk,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                      color: Colors.black,
+                      fontSize: 15,
+                      height: 1.28,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 18),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final thumbSize = ((constraints.maxWidth - 18) / 2)
+                          .clamp(78.0, 96.0)
+                          .toDouble();
+
+                      return Row(
+                        children: [
+                          for (var i = 0; i < previewSlots.length; i++) ...[
+                            if (i > 0) const SizedBox(width: 18),
+                            _CheckInPreviewBox(
+                              size: thumbSize,
+                              media: previewSlots[i],
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   Text(
-                    item.subtitle,
+                    locationText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: kMuted,
-                      fontSize: 12,
+                      color: Color(0xFF9A9A9A),
+                      fontSize: 15,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              item.meta,
-              style: const TextStyle(
-                color: kMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -882,6 +1107,50 @@ class _CheckInResultTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _CheckInPreviewBox extends StatelessWidget {
+  const _CheckInPreviewBox({required this.size, this.media});
+
+  final double size;
+  final _CheckInPreviewMedia? media;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewMedia = media;
+    final image = previewMedia == null
+        ? const ColoredBox(color: Color(0xFFD9D9D9))
+        : previewMedia.filePath == null
+        ? Image.asset(
+            previewMedia.asset,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+          )
+        : Image.file(
+            File(previewMedia.filePath!),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return const ColoredBox(color: Color(0xFFD9D9D9));
+            },
+          );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(width: size, height: size, child: image),
+    );
+  }
+}
+
+class _CheckInPreviewMedia {
+  const _CheckInPreviewMedia.asset(this.asset) : filePath = null;
+
+  const _CheckInPreviewMedia.file(this.filePath) : asset = '';
+
+  final String asset;
+  final String? filePath;
 }
 
 List<CircleMarker> _clusterGlows(List<MapIssueCluster> issueClusters) {
@@ -1045,6 +1314,31 @@ class _FocusedCheckInMarker extends StatelessWidget {
           child: const Icon(Icons.flag_rounded, color: Colors.white, size: 20),
         ),
       ],
+    );
+  }
+}
+
+class _FeedPostCheckInMarker extends StatelessWidget {
+  const _FeedPostCheckInMarker();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: kCirculGreen,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x26000000),
+            blurRadius: 7,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: const Icon(Icons.flag_rounded, color: Colors.white, size: 18),
     );
   }
 }

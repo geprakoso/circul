@@ -8,6 +8,7 @@ import 'map/map_screen.dart';
 import 'mock_data.dart';
 import 'profile/profile_screen.dart';
 import 'search/search_screen.dart';
+import 'shared/relative_timestamp.dart';
 import 'shared/sarah_avatar.dart';
 
 void main() {
@@ -55,6 +56,7 @@ class CirculShell extends StatefulWidget {
 class _CirculShellState extends State<CirculShell> {
   var _index = 0;
   var _homeRefreshToken = 0;
+  var _mapCurrentLocationRefreshToken = 0;
   MapFocusedCheckIn? _focusedCheckIn;
   final _issueClusters = <MapIssueCluster>[];
 
@@ -106,9 +108,25 @@ class _CirculShellState extends State<CirculShell> {
         point: point,
         label: post.locationLabel ?? post.city,
         coordinateLabel: post.coordinateLabel,
-        caption: post.title,
+        caption: post.body,
+        author: post.author,
+        timeLabel: post.createdAt == null
+            ? post.timeAgo
+            : formatRelativeTimestamp(post.createdAt!),
+        imageAsset: post.imageAsset,
+        imagePaths: post.imagePaths,
       );
       _index = 1;
+    });
+  }
+
+  void _handleTabChanged(int index) {
+    setState(() {
+      _index = index;
+      if (index == 1) {
+        _focusedCheckIn = null;
+        _mapCurrentLocationRefreshToken++;
+      }
     });
   }
 
@@ -127,6 +145,7 @@ class _CirculShellState extends State<CirculShell> {
         onDownCheckIn: _addHeatmapLevel,
         onPostCreated: _refreshHomePosts,
         focusedCheckIn: _focusedCheckIn,
+        currentLocationRefreshToken: _mapCurrentLocationRefreshToken,
       ),
       const SearchScreen(),
       const EventScreen(),
@@ -137,7 +156,7 @@ class _CirculShellState extends State<CirculShell> {
       body: IndexedStack(index: _index, children: screens),
       bottomNavigationBar: CirculBottomNav(
         selectedIndex: _index,
-        onChanged: (index) => setState(() => _index = index),
+        onChanged: _handleTabChanged,
       ),
     );
   }
