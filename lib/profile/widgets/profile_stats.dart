@@ -15,10 +15,10 @@ class ProfileStats extends StatelessWidget {
     ];
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.symmetric(vertical: 22),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: kLine),
       ),
       child: Row(
@@ -31,16 +31,16 @@ class ProfileStats extends StatelessWidget {
                     stats[i].$1,
                     style: const TextStyle(
                       color: kCirculGreen,
-                      fontSize: 26,
+                      fontSize: 22,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 5),
                   Text(
                     stats[i].$2,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 13,
                       color: kMuted,
                       fontWeight: FontWeight.w600,
                     ),
@@ -49,7 +49,7 @@ class ProfileStats extends StatelessWidget {
               ),
             ),
             if (i != stats.length - 1)
-              Container(width: 1, height: 54, color: kLine),
+              Container(width: 1, height: 44, color: kLine),
           ],
         ],
       ),

@@ -190,6 +190,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (index < 1) return const SizedBox.shrink();
                   return const Divider(
                     height: 1,
+                    thickness: 1,
                     indent: 20,
                     endIndent: 20,
                     color: kLine,

@@ -166,7 +166,7 @@ class _CirculShellState extends State<CirculShell> {
         focusedCheckIn: _focusedCheckIn,
         currentLocationRefreshToken: _mapCurrentLocationRefreshToken,
       ),
-      const SearchScreen(),
+      SearchScreen(feedPostRepository: widget.feedPostRepository),
       const EventScreen(),
       const ProfileScreen(),
     ];

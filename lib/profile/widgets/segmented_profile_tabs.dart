@@ -16,7 +16,7 @@ class SegmentedProfileTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabs = ['Postingan', 'Komentar', 'Disimpan', 'Aktivitas'];
     return Container(
-      height: 56,
+      height: 46,
       decoration: BoxDecoration(
         color: const Color(0xFFF1F3F2),
         borderRadius: BorderRadius.circular(12),
@@ -38,6 +38,7 @@ class SegmentedProfileTabs extends StatelessWidget {
                     tab,
                     style: TextStyle(
                       color: selected == tab ? kCirculGreen : kMuted,
+                      fontSize: 13,
                       fontWeight: FontWeight.w800,
                     ),
                   ),

@@ -1,21 +1,75 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
+import '../comments/comment_screen.dart';
+import '../feed_post_repository.dart';
+import '../image_viewer/uploaded_image_fullscreen_page.dart';
 import '../mock_data.dart';
-import '../shared/search_field_shell.dart';
+import '../shared/relative_timestamp.dart';
+import '../shared/sarah_avatar.dart';
 import 'widgets/topic_row.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.feedPostRepository});
+
+  final FeedPostRepository? feedPostRepository;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
 class _SearchScreenState extends State<SearchScreen> {
+  static const _tabs = ['Semua', 'Postingan', 'Pengguna', 'Topik'];
+
+  late final FeedPostRepository _repository;
+  late Future<List<FeedPost>> _postsFuture;
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
   var _selectedTrend = '#sampahplastik';
+  var _selectedTab = 'Semua';
+  var _submittedQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.feedPostRepository ?? FeedPostRepository();
+    _postsFuture = _repository.getPosts();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _submitSearch(String value) {
+    final query = value.trim();
+    if (query.isEmpty) return;
+    setState(() {
+      _submittedQuery = query;
+      _selectedTab = 'Semua';
+    });
+    _focusNode.unfocus();
+  }
+
+  void _cancelSearch() {
+    setState(() {
+      _submittedQuery = '';
+      _selectedTab = 'Semua';
+      _controller.clear();
+    });
+    _focusNode.unfocus();
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_submittedQuery.isEmpty) return _buildLanding(context);
+    return _buildResults(context);
+  }
+
+  Widget _buildLanding(BuildContext context) {
     return SafeArea(
       bottom: false,
       child: ListView(
@@ -28,7 +82,12 @@ class _SearchScreenState extends State<SearchScreen> {
             ).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 26),
-          const SearchFieldShell(hint: 'Search message, topic, or user'),
+          _SearchInput(
+            controller: _controller,
+            focusNode: _focusNode,
+            hint: 'Search message, topic, or user',
+            onSubmitted: _submitSearch,
+          ),
           const SizedBox(height: 28),
           Text(
             'Trending',
@@ -44,7 +103,11 @@ class _SearchScreenState extends State<SearchScreen> {
               for (final trend in ['#sampahplastik', '#zerowaste'])
                 ChoiceChip(
                   selected: _selectedTrend == trend,
-                  onSelected: (_) => setState(() => _selectedTrend = trend),
+                  onSelected: (_) {
+                    setState(() => _selectedTrend = trend);
+                    _controller.text = trend.replaceFirst('#', '');
+                    _submitSearch(_controller.text);
+                  },
                   avatar: Icon(
                     Icons.trending_up_rounded,
                     color: kCirculGreen,
@@ -76,9 +139,859 @@ class _SearchScreenState extends State<SearchScreen> {
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
-          for (final topic in topics) TopicRow(topic: topic),
+          for (final topic in topics)
+            TopicRow(topic: topic, onTap: () => _openTopicResults(topic)),
         ],
       ),
     );
   }
+
+  Widget _buildResults(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _SearchInput(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    hint: 'Search',
+                    onSubmitted: _submitSearch,
+                    onClear: () => setState(() => _controller.clear()),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                TextButton(
+                  onPressed: _cancelSearch,
+                  child: const Text(
+                    'Batal',
+                    style: TextStyle(
+                      color: kCirculGreen,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SearchTabs(
+            tabs: _tabs,
+            selectedTab: _selectedTab,
+            onChanged: (tab) => setState(() => _selectedTab = tab),
+          ),
+          const Divider(height: 1, color: kLine),
+          Expanded(
+            child: FutureBuilder<List<FeedPost>>(
+              future: _postsFuture,
+              builder: (context, snapshot) {
+                final posts = snapshot.data ?? const <FeedPost>[];
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    posts.isEmpty) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final resultPosts = _rankPosts(posts, _submittedQuery);
+                final resultUsers = _rankUsers(posts, _submittedQuery);
+                final resultTopics = _rankTopics(_submittedQuery);
+
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
+                  children: [
+                    if (_selectedTab == 'Semua' || _selectedTab == 'Postingan')
+                      _ResultSection(
+                        title: 'Postingan',
+                        showSeeAll: true,
+                        children: _postResultWidgets(resultPosts.take(2)),
+                      ),
+                    if (_selectedTab == 'Semua' || _selectedTab == 'Pengguna')
+                      _ResultSection(
+                        title: 'Pengguna',
+                        showSeeAll: true,
+                        children: [
+                          for (final user in resultUsers.take(3))
+                            _UserResultTile(user: user),
+                        ],
+                      ),
+                    if (_selectedTab == 'Semua' || _selectedTab == 'Topik')
+                      _ResultSection(
+                        title: 'Topik',
+                        showSeeAll: true,
+                        children: [
+                          for (final topic in resultTopics.take(3))
+                            _TopicResultTile(
+                              topic: topic,
+                              onTap: () => _openTopicResults(topic),
+                            ),
+                        ],
+                      ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<FeedPost> _rankPosts(List<FeedPost> posts, String query) {
+    final normalizedQuery = _normalize(query);
+    final matches = posts.where((post) {
+      return _normalize(
+        '${post.author} ${post.title} ${post.body} ${post.topic}',
+      ).contains(normalizedQuery);
+    }).toList();
+    final fallback = posts.where((post) => !matches.contains(post));
+    return [...matches, ...fallback];
+  }
+
+  List<Widget> _postResultWidgets(Iterable<FeedPost> posts) {
+    final widgets = <Widget>[];
+    var index = 0;
+    for (final post in posts) {
+      if (index > 0) {
+        widgets.add(const Divider(height: 1, thickness: 1, color: kLine));
+        widgets.add(const SizedBox(height: 18));
+      }
+      widgets.add(
+        _SearchPostResult(post: post, onTap: () => _openPostComments(post)),
+      );
+      index += 1;
+    }
+    return widgets;
+  }
+
+  void _openPostComments(FeedPost post) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (context) => CommentScreen(post: post)),
+    );
+  }
+
+  void _openTopicResults(Topic topic) {
+    final query = topic.title.startsWith('#')
+        ? topic.title.substring(1)
+        : topic.title;
+    _controller.text = query;
+    setState(() {
+      _submittedQuery = query;
+      _selectedTab = 'Semua';
+    });
+    _focusNode.unfocus();
+  }
+
+  List<_SearchUser> _rankUsers(List<FeedPost> posts, String query) {
+    final normalizedQuery = _normalize(query);
+    final users = _usersFromPosts(posts);
+    final matches = users.where((user) {
+      return _normalize(
+        '${user.username} ${user.name}',
+      ).contains(normalizedQuery);
+    }).toList();
+    final fallback = users.where((user) => !matches.contains(user));
+    return [...matches, ...fallback];
+  }
+
+  List<_SearchUser> _usersFromPosts(List<FeedPost> posts) {
+    final byAuthor = <String, List<FeedPost>>{};
+    for (final post in posts) {
+      byAuthor.putIfAbsent(post.author, () => []).add(post);
+    }
+
+    final users = [
+      for (final entry in byAuthor.entries)
+        _SearchUser.fromPosts(author: entry.key, posts: entry.value),
+    ];
+
+    users.sort((first, second) => second.postCount.compareTo(first.postCount));
+    return users;
+  }
+
+  List<Topic> _rankTopics(String query) {
+    final normalizedQuery = _normalize(query).replaceAll('#', '');
+    final matches = topics.where((topic) {
+      return _normalize(topic.title).contains(normalizedQuery) ||
+          _normalize(topic.icon).contains(normalizedQuery);
+    }).toList();
+    final hashtagTopic = Topic(
+      '#',
+      '#${normalizedQuery.replaceAll(' ', '')}',
+      '12.5K postingan',
+    );
+    return [
+      hashtagTopic,
+      ...matches.where((topic) => topic.title != hashtagTopic.title),
+    ];
+  }
+
+  String _normalize(String value) => value.toLowerCase().trim();
+}
+
+class _SearchInput extends StatelessWidget {
+  const _SearchInput({
+    required this.controller,
+    required this.focusNode,
+    required this.hint,
+    required this.onSubmitted,
+    this.onClear,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String hint;
+  final ValueChanged<String> onSubmitted;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 60,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F1F3),
+        borderRadius: BorderRadius.circular(32),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, color: Color(0xFF4B5563), size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              textInputAction: TextInputAction.search,
+              onSubmitted: onSubmitted,
+              style: const TextStyle(
+                color: kInk,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                isCollapsed: true,
+                hintText: hint,
+                hintStyle: const TextStyle(
+                  color: kMuted,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+          if (onClear != null)
+            GestureDetector(
+              onTap: onClear,
+              child: Container(
+                width: 25,
+                height: 25,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF9CA3AF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchTabs extends StatelessWidget {
+  const _SearchTabs({
+    required this.tabs,
+    required this.selectedTab,
+    required this.onChanged,
+  });
+
+  final List<String> tabs;
+  final String selectedTab;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: tabs.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 22),
+        itemBuilder: (context, index) {
+          final tab = tabs[index];
+          final selected = tab == selectedTab;
+          return InkWell(
+            onTap: () => onChanged(tab),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  tab,
+                  style: TextStyle(
+                    color: selected ? kCirculGreen : kMuted,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: 76,
+                  height: 3,
+                  color: selected ? kCirculGreen : Colors.transparent,
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ResultSection extends StatelessWidget {
+  const _ResultSection({
+    required this.title,
+    required this.children,
+    this.showSeeAll = false,
+  });
+
+  final String title;
+  final List<Widget> children;
+  final bool showSeeAll;
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                color: kInk,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const Spacer(),
+            if (showSeeAll)
+              const Text(
+                'Lihat semua',
+                style: TextStyle(
+                  color: kCirculGreen,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        ...children,
+        const Divider(height: 30, color: kLine),
+      ],
+    );
+  }
+}
+
+class _SearchPostResult extends StatelessWidget {
+  const _SearchPostResult({required this.post, required this.onTap});
+
+  final FeedPost post;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final timestamp = post.createdAt == null
+        ? post.timeAgo
+        : formatRelativeTimestamp(post.createdAt!);
+    final title = post.title.trim().isEmpty ? post.topic : post.title;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SarahAvatar(radius: 26),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      Text(
+                        post.author,
+                        style: const TextStyle(
+                          color: kInk,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      if (post.topic.isNotEmpty) _TopicPill(text: post.topic),
+                      const _Dot(),
+                      Text(
+                        timestamp,
+                        style: const TextStyle(
+                          color: kMuted,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: kInk,
+                                fontSize: 16,
+                                height: 1.25,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              post.body,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: kInk,
+                                fontSize: 15,
+                                height: 1.45,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _PostThumb(post: post),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      _MiniAction(
+                        icon: Icons.favorite_border_rounded,
+                        text: '${post.likes}',
+                      ),
+                      _MiniAction(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        text: '${post.comments}',
+                      ),
+                      const _MiniAction(
+                        icon: Icons.reply_rounded,
+                        text: 'Bagikan',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.more_horiz_rounded, color: kMuted, size: 24),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PostThumb extends StatelessWidget {
+  const _PostThumb({required this.post});
+
+  final FeedPost post;
+
+  @override
+  Widget build(BuildContext context) {
+    final localPath = post.imagePaths.isEmpty ? null : post.imagePaths.first;
+    final asset = post.imageAsset.isEmpty ? null : post.imageAsset;
+    final hasMultiple = post.imagePaths.length > 1;
+
+    Widget child;
+    if (localPath != null) {
+      child = Image.file(
+        File(localPath),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return const ColoredBox(color: Color(0xFFE5E7EB));
+        },
+      );
+    } else if (asset != null) {
+      child = Image.asset(asset, fit: BoxFit.cover);
+    } else {
+      child = const ColoredBox(color: Color(0xFFE5E7EB));
+    }
+
+    return GestureDetector(
+      onTap: localPath == null
+          ? null
+          : () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) =>
+                      UploadedImageFullscreenPage(imagePath: localPath),
+                ),
+              );
+            },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: 96,
+          height: 96,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              child,
+              if (hasMultiple)
+                Positioned(
+                  left: 6,
+                  top: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: .55),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${post.imagePaths.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _UserResultTile extends StatelessWidget {
+  const _UserResultTile({required this.user});
+
+  final _SearchUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Row(
+        children: [
+          _UserAvatar(user: user),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  user.username,
+                  style: const TextStyle(
+                    color: kInk,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  user.name,
+                  style: const TextStyle(
+                    color: kMuted,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${user.postCount} postingan • Aktif ${user.activeAgo}',
+                  style: const TextStyle(
+                    color: kMuted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          OutlinedButton(
+            onPressed: () {},
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kCirculGreen,
+              side: const BorderSide(color: kCirculGreen),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: const Text(
+              'Ikuti',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopicResultTile extends StatelessWidget {
+  const _TopicResultTile({required this.topic, required this.onTap});
+
+  final Topic topic;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEFF8F2),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                topic.icon,
+                style: const TextStyle(
+                  color: kCirculGreen,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  topic.title,
+                  style: const TextStyle(
+                    color: kInk,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  topic.count,
+                  style: const TextStyle(
+                    color: kMuted,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TopicPill extends StatelessWidget {
+  const _TopicPill({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F1F3),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: kMuted,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniAction extends StatelessWidget {
+  const _MiniAction({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        border: Border.all(color: kLine),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: kMuted, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              color: kMuted,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UserAvatar extends StatelessWidget {
+  const _UserAvatar({required this.user});
+
+  final _SearchUser user;
+
+  @override
+  Widget build(BuildContext context) {
+    if (user.assetPath != null) return SarahAvatar(radius: 27);
+
+    return CircleAvatar(
+      radius: 27,
+      backgroundColor: user.color,
+      child: Text(
+        user.initial,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 28,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  const _Dot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: const BoxDecoration(
+        color: Colors.black,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _SearchUser {
+  const _SearchUser({
+    required this.username,
+    required this.name,
+    required this.postCount,
+    required this.activeAgo,
+    required this.initial,
+    required this.color,
+    this.assetPath,
+  });
+
+  factory _SearchUser.fromPosts({
+    required String author,
+    required List<FeedPost> posts,
+  }) {
+    final latestPost = posts.reduce((first, second) {
+      final firstDate =
+          first.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final secondDate =
+          second.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return firstDate.isAfter(secondDate) ? first : second;
+    });
+    final activeAgo = latestPost.createdAt == null
+        ? latestPost.timeAgo
+        : formatRelativeTimestamp(latestPost.createdAt!);
+
+    return _SearchUser(
+      username: author,
+      name: _displayName(author),
+      postCount: posts.length,
+      activeAgo: activeAgo,
+      initial: author.isEmpty ? '?' : author.characters.first.toUpperCase(),
+      color: author == 'sarahmae' ? kCirculGreen : _avatarColor(author),
+      assetPath: author == 'sarahmae' ? avatarAsset : null,
+    );
+  }
+
+  final String username;
+  final String name;
+  final int postCount;
+  final String activeAgo;
+  final String initial;
+  final Color color;
+  final String? assetPath;
+}
+
+String _displayName(String author) {
+  if (author == 'sarahmae') return 'Sarah Mae';
+  return author
+      .split(RegExp(r'[._-]'))
+      .where((part) => part.isNotEmpty)
+      .map(
+        (part) => '${part.characters.first.toUpperCase()}${part.substring(1)}',
+      )
+      .join(' ');
+}
+
+Color _avatarColor(String value) {
+  const colors = [
+    Color(0xFF35C96B),
+    Color(0xFF86A9A8),
+    Color(0xFFE98B64),
+    Color(0xFF8BC8E8),
+  ];
+  return colors[value.hashCode.abs() % colors.length];
 }

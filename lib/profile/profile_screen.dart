@@ -28,12 +28,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           const CirculHeader(showChat: false),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SarahAvatar(radius: 72),
-                const SizedBox(width: 28),
+                const SarahAvatar(radius: 56),
+                const SizedBox(width: 18),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,26 +41,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Text(
                         'Sarah Mae',
                         style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                            ?.copyWith(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                            ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 3),
                       const Text(
                         '@sarahmae',
                         style: TextStyle(
                           color: kMuted,
-                          fontSize: 18,
+                          fontSize: 15,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       const Text(
                         'Berusaha hidup lebih berkelanjutan 🌿\nBelajar, berbagi, dan berdampak.',
-                        style: TextStyle(fontSize: 17, height: 1.35),
+                        style: TextStyle(fontSize: 15, height: 1.35),
                       ),
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 16),
                       const Wrap(
-                        spacing: 18,
-                        runSpacing: 10,
+                        spacing: 14,
+                        runSpacing: 8,
                         children: [
                           ProfileMeta(
                             icon: Icons.location_on_outlined,
@@ -72,13 +75,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       OutlinedButton.icon(
                         onPressed: () {},
                         icon: const Icon(Icons.edit_square),
                         label: const Text('Edit Profil'),
                         style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(52),
+                          minimumSize: const Size.fromHeight(44),
                           foregroundColor: kInk,
                           side: const BorderSide(color: kLine),
                           shape: RoundedRectangleBorder(

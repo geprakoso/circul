@@ -13,11 +13,15 @@ class ProfileMeta extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: kMuted, size: 22),
-        const SizedBox(width: 8),
+        Icon(icon, color: kMuted, size: 18),
+        const SizedBox(width: 6),
         Text(
           text,
-          style: const TextStyle(color: kMuted, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            color: kMuted,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );

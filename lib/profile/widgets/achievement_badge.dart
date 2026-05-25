@@ -14,30 +14,30 @@ class AchievementBadge extends StatelessWidget {
       child: Column(
         children: [
           Container(
-            width: 86,
-            height: 86,
+            width: 68,
+            height: 68,
             decoration: BoxDecoration(
               color: kSoftGreen,
               shape: BoxShape.circle,
               border: Border.all(color: kLine),
             ),
-            child: Icon(achievement.icon, color: kCirculGreen, size: 42),
+            child: Icon(achievement.icon, color: kCirculGreen, size: 32),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Text(
             achievement.title,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 15,
+              fontSize: 13,
               fontWeight: FontWeight.w800,
               height: 1.2,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Text(
             achievement.caption,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: kMuted, fontSize: 13, height: 1.3),
+            style: const TextStyle(color: kMuted, fontSize: 12, height: 1.25),
           ),
         ],
       ),
