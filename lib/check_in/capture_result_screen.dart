@@ -22,6 +22,7 @@ class CaptureResultScreen extends StatefulWidget {
     this.onDownSelected,
     this.useDummyCapture = false,
     this.feedPostRepository,
+    this.checkoutMode = false,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
 
@@ -29,6 +30,7 @@ class CaptureResultScreen extends StatefulWidget {
   final ValueChanged<LatLng>? onDownSelected;
   final bool useDummyCapture;
   final FeedPostRepository? feedPostRepository;
+  final bool checkoutMode;
   final ImagePicker? _imagePicker;
 
   @override
@@ -358,12 +360,17 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
                 ),
                 const SizedBox(height: 14),
                 Expanded(
-                  child: _ConditionPanel(
-                    selectedChoice: _selectedChoice,
-                    onChoiceSelected: _selectChoice,
-                    onExamplesTap: () =>
-                        _showPlaceholderMessage('Contoh kondisi akan dibuka.'),
-                  ),
+                  child: widget.checkoutMode
+                      ? _CheckoutPanel(
+                          onDone: () => Navigator.of(context).pop(true),
+                        )
+                      : _ConditionPanel(
+                          selectedChoice: _selectedChoice,
+                          onChoiceSelected: _selectChoice,
+                          onExamplesTap: () => _showPlaceholderMessage(
+                            'Contoh kondisi akan dibuka.',
+                          ),
+                        ),
                 ),
               ],
             );
@@ -654,6 +661,92 @@ class _RetakeButton extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CheckoutPanel extends StatelessWidget {
+  const _CheckoutPanel({required this.onDone});
+
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 18,
+            offset: Offset(0, -6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          10,
+          18,
+          16 + MediaQuery.paddingOf(context).bottom,
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1D5DB),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const Spacer(),
+            const _LeafBadge(),
+            const SizedBox(height: 12),
+            const Text(
+              'Checkout selesai?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF083E23),
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Simpan capture ini untuk menyelesaikan titik check-in.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Color(0xFF4B5563),
+                fontSize: 14,
+                height: 1.38,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: FilledButton(
+                onPressed: onDone,
+                style: FilledButton.styleFrom(
+                  backgroundColor: kCirculGreen,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'Selesai',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

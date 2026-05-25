@@ -61,6 +61,7 @@ class FeedPostRepository {
           : null,
       'location_latitude': locationLatitude,
       'location_longitude': locationLongitude,
+      'checkout_completed': 0,
       'likes': 0,
       'comments': 0,
       'topic': cleanTopic.isEmpty ? null : cleanTopic,
@@ -99,6 +100,7 @@ class FeedPostRepository {
         'coordinate_label': post.coordinateLabel,
         'location_latitude': post.locationLatitude,
         'location_longitude': post.locationLongitude,
+        'checkout_completed': post.checkoutCompleted ? 1 : 0,
         'likes': post.likes,
         'comments': post.comments,
         'topic': post.topic.isEmpty ? null : post.topic,
@@ -129,8 +131,22 @@ class FeedPostRepository {
       coordinateLabel: row['coordinate_label'] as String?,
       locationLatitude: _doubleFromRow(row['location_latitude']),
       locationLongitude: _doubleFromRow(row['location_longitude']),
+      checkoutCompleted: row['checkout_completed'] == 1,
       likes: row['likes'] as int,
       comments: row['comments'] as int,
+    );
+  }
+
+  Future<void> completeCheckout(String postId) async {
+    if (postId.isEmpty) return;
+
+    final db = await _database.database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.update(
+      CirculDatabase.feedPostsTable,
+      {'checkout_completed': 1, 'updated_at': now},
+      where: 'id = ?',
+      whereArgs: [postId],
     );
   }
 

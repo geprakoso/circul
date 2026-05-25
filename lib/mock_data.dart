@@ -27,6 +27,7 @@ class FeedPost {
     this.coordinateLabel,
     this.locationLatitude,
     this.locationLongitude,
+    this.checkoutCompleted = false,
   });
 
   final String id;
@@ -44,6 +45,7 @@ class FeedPost {
   final String? coordinateLabel;
   final double? locationLatitude;
   final double? locationLongitude;
+  final bool checkoutCompleted;
   final int likes;
   final int comments;
 
@@ -106,6 +108,11 @@ class PostComment {
     required this.initials,
     required this.avatarColor,
     this.likes = 0,
+    this.locationEnabled = false,
+    this.locationLabel,
+    this.coordinateLabel,
+    this.locationLatitude,
+    this.locationLongitude,
   });
 
   final String id;
@@ -116,6 +123,11 @@ class PostComment {
   final String initials;
   final Color avatarColor;
   final int likes;
+  final bool locationEnabled;
+  final String? locationLabel;
+  final String? coordinateLabel;
+  final double? locationLatitude;
+  final double? locationLongitude;
 }
 
 const feedPosts = [

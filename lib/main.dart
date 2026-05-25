@@ -94,6 +94,24 @@ class _CirculShellState extends State<CirculShell> {
     _recordHeatmapLevel(point, showMap: false);
   }
 
+  void _removeHeatmapLevel(LatLng point) {
+    setState(() {
+      final clusterIndex = _issueClusters.indexWhere(
+        (cluster) => MapScreen.distanceMeters(cluster.point, point) <= 75,
+      );
+      if (clusterIndex == -1) return;
+
+      final cluster = _issueClusters[clusterIndex];
+      if (cluster.count <= 1) {
+        _issueClusters.removeAt(clusterIndex);
+      } else {
+        _issueClusters[clusterIndex] = cluster.copyWith(
+          count: cluster.count - 1,
+        );
+      }
+    });
+  }
+
   void _refreshHomePosts() {
     setState(() => _homeRefreshToken++);
   }
@@ -144,6 +162,7 @@ class _CirculShellState extends State<CirculShell> {
         feedPostRepository: widget.feedPostRepository,
         onDownCheckIn: _addHeatmapLevel,
         onPostCreated: _refreshHomePosts,
+        onCheckoutCompleted: _removeHeatmapLevel,
         focusedCheckIn: _focusedCheckIn,
         currentLocationRefreshToken: _mapCurrentLocationRefreshToken,
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../comment_repository.dart';
 import '../home/widgets/feed_post_card.dart';
 import '../mock_data.dart';
+import '../new_post/widgets/attachment_media_strip.dart';
 
 class CommentScreen extends StatefulWidget {
   const CommentScreen({super.key, required this.post, this.commentRepository});
@@ -221,6 +222,20 @@ class CommentTile extends StatelessWidget {
                     fontWeight: FontWeight.w400,
                   ),
                 ),
+                if (comment.locationEnabled) ...[
+                  const SizedBox(height: 12),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      return LocationPlaceholderBox(
+                        enabled: true,
+                        loading: false,
+                        width: constraints.maxWidth,
+                        label: comment.locationLabel,
+                        coordinateLabel: comment.coordinateLabel,
+                      );
+                    },
+                  ),
+                ],
               ],
             ),
           ),

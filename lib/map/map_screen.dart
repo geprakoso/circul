@@ -4,9 +4,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../check_in/capture_result_screen.dart';
+import '../comment_repository.dart';
 import '../feed_post_repository.dart';
 import '../mock_data.dart';
 import '../shared/relative_timestamp.dart';
@@ -28,6 +30,7 @@ class MapScreen extends StatefulWidget {
     this.onDownCheckIn,
     this.feedPostRepository,
     this.onPostCreated,
+    this.onCheckoutCompleted,
     this.focusedCheckIn,
     this.currentLocationRefreshToken = 0,
   });
@@ -36,6 +39,7 @@ class MapScreen extends StatefulWidget {
   final ValueChanged<LatLng>? onDownCheckIn;
   final FeedPostRepository? feedPostRepository;
   final VoidCallback? onPostCreated;
+  final ValueChanged<LatLng>? onCheckoutCompleted;
   final MapFocusedCheckIn? focusedCheckIn;
   final int currentLocationRefreshToken;
 
@@ -54,11 +58,14 @@ class _MapScreenState extends State<MapScreen>
   final _mapController = MapController();
   late final AnimationController _cameraAnimationController;
   late final FeedPostRepository _repository;
+  late final CommentRepository _commentRepository;
+  late final ImagePicker _imagePicker;
   var _currentLocation = _gondangManisCenter;
   var _isLocating = false;
   var _isResolvingLocation = false;
   var _flagMenuExpanded = false;
   var _feedCheckIns = <FeedPost>[];
+  _VisibleCheckIn? _selectedCheckIn;
   DateTime? _lastResolvedLocationAt;
   Timer? _visibleBoundsRefreshTimer;
   LatLngBounds? _visibleBounds;
@@ -67,6 +74,8 @@ class _MapScreenState extends State<MapScreen>
   void initState() {
     super.initState();
     _repository = widget.feedPostRepository ?? FeedPostRepository();
+    _commentRepository = CommentRepository();
+    _imagePicker = ImagePicker();
     _cameraAnimationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -206,8 +215,16 @@ class _MapScreenState extends State<MapScreen>
         ),
         _CheckInBottomSheet(
           items: visibleCheckIns,
-          onItemTap: (item) => _animateMapTo(item.point, 17),
+          onItemTap: _openCheckInDetail,
         ),
+        if (_selectedCheckIn != null)
+          _CheckInDetailSheet(
+            item: _selectedCheckIn!,
+            onClose: () => setState(() => _selectedCheckIn = null),
+            onCheckout: _selectedCheckIn!.post == null
+                ? null
+                : () => _openCheckoutCamera(_selectedCheckIn!),
+          ),
       ],
     );
   }
@@ -219,12 +236,66 @@ class _MapScreenState extends State<MapScreen>
 
       setState(() {
         _feedCheckIns = posts
-            .where((post) => post.locationEnabled && post.locationPoint != null)
+            .where(
+              (post) =>
+                  post.locationEnabled &&
+                  post.locationPoint != null &&
+                  !post.checkoutCompleted,
+            )
             .toList(growable: false);
       });
     } catch (_) {
       if (mounted) setState(() => _feedCheckIns = const []);
     }
+  }
+
+  void _openCheckInDetail(_VisibleCheckIn item) {
+    setState(() => _selectedCheckIn = item);
+    _animateMapTo(item.point, 17);
+  }
+
+  Future<void> _openCheckoutCamera(_VisibleCheckIn item) async {
+    final post = item.post;
+    if (post == null) return;
+
+    String? imagePath;
+    if (!Platform.isMacOS) {
+      try {
+        final image = await _imagePicker.pickImage(
+          source: ImageSource.camera,
+          imageQuality: 92,
+          maxWidth: 1800,
+        );
+        if (!mounted || image == null) return;
+        imagePath = image.path;
+      } catch (_) {
+        if (!mounted) return;
+        _showLocationMessage('Kamera belum bisa dibuka.');
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    final completed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (context) => CaptureResultScreen(
+          imagePath: imagePath,
+          useDummyCapture: Platform.isMacOS,
+          checkoutMode: true,
+        ),
+      ),
+    );
+    if (!mounted || completed != true) return;
+
+    await _repository.completeCheckout(post.id);
+    await _commentRepository.addCheckoutComment(post: post);
+    await _loadFeedCheckIns();
+
+    if (!mounted) return;
+    widget.onCheckoutCompleted?.call(item.point);
+    widget.onPostCreated?.call();
+    setState(() => _selectedCheckIn = null);
+    _showLocationMessage('Checkout selesai.');
   }
 
   void _syncVisibleBounds([MapCamera? camera]) {
@@ -496,6 +567,7 @@ class _VisibleCheckIn {
     required this.distanceMeters,
     this.imageAsset = '',
     this.imagePaths = const [],
+    this.post,
     this.isFocused = false,
   });
 
@@ -546,6 +618,7 @@ class _VisibleCheckIn {
       distanceMeters: distanceMeters,
       imageAsset: post.imageAsset,
       imagePaths: post.imagePaths,
+      post: post,
     );
   }
 
@@ -609,6 +682,7 @@ class _VisibleCheckIn {
   final double distanceMeters;
   final String imageAsset;
   final List<String> imagePaths;
+  final FeedPost? post;
   final bool isFocused;
 
   int get imageCount => imagePaths.length + (imageAsset.isEmpty ? 0 : 1);
@@ -942,6 +1016,130 @@ class _CheckInBottomSheet extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _CheckInDetailSheet extends StatelessWidget {
+  const _CheckInDetailSheet({
+    required this.item,
+    required this.onClose,
+    required this.onCheckout,
+  });
+
+  final _VisibleCheckIn item;
+  final VoidCallback onClose;
+  final VoidCallback? onCheckout;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Material(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        elevation: 12,
+        shadowColor: const Color(0x33000000),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .62,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(18, 9, 18, 18),
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 34,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD1D5DB),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Text(
+                          'Detail check-in',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: kInk,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: 'Tutup',
+                          onPressed: onClose,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 1, color: kLine),
+                    _CheckInResultTile(item: item, onTap: () {}),
+                  ],
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.fromLTRB(18, 12, 18, 12 + bottomPadding),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: kLine)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: onClose,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: kInk,
+                          side: const BorderSide(color: kLine),
+                          minimumSize: const Size.fromHeight(50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Tutup',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: onCheckout,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: kCirculGreen,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFFD1D5DB),
+                          minimumSize: const Size.fromHeight(50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Checkout',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
