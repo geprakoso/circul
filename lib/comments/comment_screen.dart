@@ -19,7 +19,9 @@ class _CommentScreenState extends State<CommentScreen> {
   final _controller = TextEditingController();
   late final CommentRepository _repository;
   late Future<List<PostComment>> _commentsFuture;
+  late FeedPost _post;
   var _isSubmitting = false;
+  var _hasChanges = false;
 
   bool get _canSend => !_isSubmitting && _controller.text.trim().isNotEmpty;
 
@@ -27,7 +29,8 @@ class _CommentScreenState extends State<CommentScreen> {
   void initState() {
     super.initState();
     _repository = widget.commentRepository ?? CommentRepository();
-    _commentsFuture = _repository.getComments(widget.post);
+    _post = widget.post;
+    _commentsFuture = _repository.getComments(_post);
     _controller.addListener(() => setState(() {}));
   }
 
@@ -35,6 +38,10 @@ class _CommentScreenState extends State<CommentScreen> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  void _close() {
+    Navigator.of(context).pop(_hasChanges);
   }
 
   Future<void> _submitComment() async {
@@ -60,61 +67,73 @@ class _CommentScreenState extends State<CommentScreen> {
 
     if (!mounted || savedComment == null) return;
     _controller.clear();
-    setState(() => _commentsFuture = _repository.getComments(widget.post));
+    setState(() {
+      _hasChanges = true;
+      _post = _post.copyWith(comments: _post.comments + 1);
+      _commentsFuture = _repository.getComments(_post);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _CommentHeader(onBack: () => Navigator.of(context).pop()),
-            const Divider(height: 1, color: kLine),
-            Expanded(
-              child: FutureBuilder<List<PostComment>>(
-                future: _commentsFuture,
-                builder: (context, snapshot) {
-                  final comments = snapshot.data ?? const <PostComment>[];
+    return PopScope<bool>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _close();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _CommentHeader(onBack: _close),
+              const Divider(height: 1, color: kLine),
+              Expanded(
+                child: FutureBuilder<List<PostComment>>(
+                  future: _commentsFuture,
+                  builder: (context, snapshot) {
+                    final comments = snapshot.data ?? const <PostComment>[];
 
-                  return ListView(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    children: [
-                      FeedPostCard(post: widget.post),
-                      const Divider(height: 1, color: kLine),
-                      if (snapshot.connectionState == ConnectionState.waiting &&
-                          comments.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 48),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (snapshot.hasError)
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(20, 28, 20, 0),
-                          child: Text(
-                            'Komentar belum bisa dibuka.',
-                            style: TextStyle(
-                              color: kInk,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
+                    return ListView(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      children: [
+                        FeedPostCard(post: _post),
+                        const Divider(height: 1, color: kLine),
+                        if (snapshot.connectionState ==
+                                ConnectionState.waiting &&
+                            comments.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 48),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else if (snapshot.hasError)
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(20, 28, 20, 0),
+                            child: Text(
+                              'Komentar belum bisa dibuka.',
+                              style: TextStyle(
+                                color: kInk,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
-                        )
-                      else
-                        for (final comment in comments)
-                          CommentTile(comment: comment),
-                    ],
-                  );
-                },
+                          )
+                        else
+                          for (final comment in comments)
+                            CommentTile(comment: comment),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-            _CommentComposer(
-              controller: _controller,
-              canSend: _canSend,
-              onSend: _submitComment,
-            ),
-          ],
+              _CommentComposer(
+                controller: _controller,
+                canSend: _canSend,
+                onSend: _submitComment,
+              ),
+            ],
+          ),
         ),
       ),
     );

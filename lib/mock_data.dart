@@ -64,6 +64,48 @@ class FeedPost {
     if (parsedLatitude == null || parsedLongitude == null) return null;
     return LatLng(parsedLatitude, parsedLongitude);
   }
+
+  FeedPost copyWith({
+    String? id,
+    String? author,
+    String? city,
+    String? timeAgo,
+    String? title,
+    String? body,
+    String? imageAsset,
+    DateTime? createdAt,
+    String? topic,
+    List<String>? imagePaths,
+    bool? locationEnabled,
+    String? locationLabel,
+    String? coordinateLabel,
+    double? locationLatitude,
+    double? locationLongitude,
+    bool? checkoutCompleted,
+    int? likes,
+    int? comments,
+  }) {
+    return FeedPost(
+      id: id ?? this.id,
+      author: author ?? this.author,
+      city: city ?? this.city,
+      timeAgo: timeAgo ?? this.timeAgo,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      imageAsset: imageAsset ?? this.imageAsset,
+      createdAt: createdAt ?? this.createdAt,
+      topic: topic ?? this.topic,
+      imagePaths: imagePaths ?? this.imagePaths,
+      locationEnabled: locationEnabled ?? this.locationEnabled,
+      locationLabel: locationLabel ?? this.locationLabel,
+      coordinateLabel: coordinateLabel ?? this.coordinateLabel,
+      locationLatitude: locationLatitude ?? this.locationLatitude,
+      locationLongitude: locationLongitude ?? this.locationLongitude,
+      checkoutCompleted: checkoutCompleted ?? this.checkoutCompleted,
+      likes: likes ?? this.likes,
+      comments: comments ?? this.comments,
+    );
+  }
 }
 
 class Topic {

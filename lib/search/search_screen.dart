@@ -11,9 +11,10 @@ import '../shared/sarah_avatar.dart';
 import 'widgets/topic_row.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key, this.feedPostRepository});
+  const SearchScreen({super.key, this.feedPostRepository, this.onPostUpdated});
 
   final FeedPostRepository? feedPostRepository;
+  final VoidCallback? onPostUpdated;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -267,10 +268,16 @@ class _SearchScreenState extends State<SearchScreen> {
     return widgets;
   }
 
-  void _openPostComments(FeedPost post) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (context) => CommentScreen(post: post)),
+  Future<void> _openPostComments(FeedPost post) async {
+    final didChange = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (context) => CommentScreen(post: post)),
     );
+    if (!mounted || didChange != true) return;
+
+    setState(() {
+      _postsFuture = _repository.getPosts();
+    });
+    widget.onPostUpdated?.call();
   }
 
   void _openTopicResults(Topic topic) {

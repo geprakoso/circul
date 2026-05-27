@@ -15,10 +15,12 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     this.feedPostRepository,
+    this.onPostUpdated,
     this.refreshToken = 0,
   });
 
   final FeedPostRepository? feedPostRepository;
+  final VoidCallback? onPostUpdated;
   final int refreshToken;
 
   @override
@@ -47,10 +49,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  void _openComments(FeedPost post) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (context) => CommentScreen(post: post)),
+  Future<void> _openComments(FeedPost post) async {
+    final didChange = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (context) => CommentScreen(post: post)),
     );
+    if (!mounted || didChange != true) return;
+
+    setState(() {
+      _postsFuture = _repository.getPosts();
+    });
+    widget.onPostUpdated?.call();
   }
 
   @override

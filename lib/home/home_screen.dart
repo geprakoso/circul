@@ -20,6 +20,7 @@ class HomeScreen extends StatefulWidget {
     this.onDownCheckIn,
     this.onOpenLocationPost,
     this.onPostCreated,
+    this.onPostUpdated,
     this.refreshToken = 0,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
@@ -28,6 +29,7 @@ class HomeScreen extends StatefulWidget {
   final ValueChanged<LatLng>? onDownCheckIn;
   final ValueChanged<FeedPost>? onOpenLocationPost;
   final VoidCallback? onPostCreated;
+  final VoidCallback? onPostUpdated;
   final int refreshToken;
   final ImagePicker? _imagePicker;
 
@@ -73,10 +75,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openComments(FeedPost post) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (context) => CommentScreen(post: post)),
+  Future<void> _openComments(FeedPost post) async {
+    final didChange = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(builder: (context) => CommentScreen(post: post)),
     );
+    if (!mounted || didChange != true) return;
+
+    setState(() {
+      _postsFuture = _repository.getPosts();
+    });
+    widget.onPostUpdated?.call();
   }
 
   void _openLocationPost(FeedPost post) {

@@ -162,6 +162,7 @@ class _CirculShellState extends State<CirculShell> {
         onDownCheckIn: _addHomeCheckInHeatmapLevel,
         onOpenLocationPost: _openPostLocationOnMap,
         onPostCreated: _refreshPostConsumers,
+        onPostUpdated: _refreshPostConsumers,
         refreshToken: _homeRefreshToken,
       ),
       MapScreen(
@@ -173,10 +174,14 @@ class _CirculShellState extends State<CirculShell> {
         focusedCheckIn: _focusedCheckIn,
         currentLocationRefreshToken: _mapCurrentLocationRefreshToken,
       ),
-      SearchScreen(feedPostRepository: widget.feedPostRepository),
+      SearchScreen(
+        feedPostRepository: widget.feedPostRepository,
+        onPostUpdated: _refreshPostConsumers,
+      ),
       const EventScreen(),
       ProfileScreen(
         feedPostRepository: widget.feedPostRepository,
+        onPostUpdated: _refreshPostConsumers,
         refreshToken: _profileRefreshToken,
       ),
     ];
