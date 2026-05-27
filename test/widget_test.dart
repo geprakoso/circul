@@ -1,8 +1,10 @@
 import 'package:circul/comment_repository.dart';
 import 'package:circul/feed_post_repository.dart';
+import 'package:circul/home/widgets/feed_post_card.dart';
 import 'package:circul/main.dart';
 import 'package:circul/mock_data.dart';
 import 'package:circul/profile/profile_screen.dart';
+import 'package:circul/saved_post_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -108,6 +110,7 @@ void main() {
               ],
             ),
             commentRepository: _FakeCommentRepository(),
+            savedPostRepository: _FakeSavedPostRepository(),
           ),
         ),
       ),
@@ -164,6 +167,7 @@ void main() {
                 ),
               ],
             ),
+            savedPostRepository: _FakeSavedPostRepository(),
           ),
         ),
       ),
@@ -190,6 +194,223 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Bagikan'), findsWidgets);
+  });
+
+  testWidgets('post options bottom sheet follows owner and edit window rules', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FeedPostCard(
+            post: FeedPost(
+              author: 'sarahmae',
+              city: 'Solo',
+              timeAgo: 'Baru saja',
+              title: 'Post sendiri',
+              body: 'Masih bisa diedit.',
+              imageAsset: '',
+              createdAt: DateTime.now().subtract(const Duration(minutes: 20)),
+              likes: 0,
+              comments: 0,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Lainnya'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Save'), findsOneWidget);
+    expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+    expect(find.text('Report'), findsOneWidget);
+
+    Navigator.of(tester.element(find.text('Save'))).pop();
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FeedPostCard(
+            post: FeedPost(
+              author: 'anotheruser',
+              city: 'Solo',
+              timeAgo: 'Baru saja',
+              title: 'Post orang lain',
+              body: 'Tidak boleh edit hapus.',
+              imageAsset: '',
+              createdAt: DateTime.now().subtract(const Duration(minutes: 20)),
+              likes: 0,
+              comments: 0,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Lainnya'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Save'), findsOneWidget);
+    expect(find.text('Edit'), findsNothing);
+    expect(find.text('Delete'), findsNothing);
+    expect(find.text('Report'), findsOneWidget);
+
+    Navigator.of(tester.element(find.text('Save'))).pop();
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FeedPostCard(
+            post: FeedPost(
+              author: 'sarahmae',
+              city: 'Solo',
+              timeAgo: '2 jam',
+              title: 'Post sendiri lama',
+              body: 'Sudah lewat batas edit.',
+              imageAsset: '',
+              createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+              likes: 0,
+              comments: 0,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Lainnya'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Save'), findsOneWidget);
+    expect(find.text('Edit'), findsNothing);
+    expect(find.text('Delete'), findsOneWidget);
+    expect(find.text('Report'), findsOneWidget);
+  });
+
+  testWidgets('save option stores post and shows saved state in profile', (
+    tester,
+  ) async {
+    final savedRepository = _FakeSavedPostRepository();
+    final post = feedPosts.first.copyWith(id: 'seed_1');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FeedPostCard(post: post, savedPostRepository: savedRepository),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Lainnya'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Postingan disimpan.'), findsOneWidget);
+    expect(find.text('Save'), findsNothing);
+
+    await tester.tap(find.byTooltip('Lainnya'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Postingan sudah ada di Disimpan.'), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProfileScreen(
+            feedPostRepository: _FakeFeedPostRepository(posts: [post]),
+            commentRepository: _FakeCommentRepository(),
+            savedPostRepository: savedRepository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Disimpan'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Disimpan'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Tips mengurangi sampah plastik di rumah 🌿'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(
+      find.text('Tips mengurangi sampah plastik di rumah 🌿'),
+      findsOneWidget,
+    );
+    expect(savedRepository.savedPostCount, 1);
+  });
+
+  testWidgets('saved tab menu only deletes saved entry', (tester) async {
+    final savedRepository = _FakeSavedPostRepository();
+    final post = feedPosts.first.copyWith(id: 'seed_1');
+    await savedRepository.savePost(post);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProfileScreen(
+            feedPostRepository: _FakeFeedPostRepository(posts: [post]),
+            commentRepository: _FakeCommentRepository(),
+            savedPostRepository: savedRepository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Disimpan'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Disimpan'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Tips mengurangi sampah plastik di rumah 🌿'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.byTooltip('Lainnya').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete'), findsOneWidget);
+    expect(find.text('Save'), findsNothing);
+    expect(find.text('Edit'), findsNothing);
+    expect(find.text('Report'), findsNothing);
+
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Postingan dihapus dari Disimpan.'), findsOneWidget);
+    expect(savedRepository.savedPostCount, 0);
+    expect(find.text('Belum ada postingan disimpan.'), findsOneWidget);
+
+    await tester.tap(find.text('Postingan'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Tips mengurangi sampah plastik di rumah 🌿'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.text('Tips mengurangi sampah plastik di rumah 🌿'),
+      findsOneWidget,
+    );
   });
 }
 
@@ -246,5 +467,31 @@ class _FakeCommentRepository extends CommentRepository {
   @override
   Future<List<UserCommentResult>> getCommentsByAuthor(String author) async {
     return _results;
+  }
+}
+
+class _FakeSavedPostRepository extends SavedPostRepository {
+  final _savedPostsById = <String, FeedPost>{};
+
+  int get savedPostCount => _savedPostsById.length;
+
+  @override
+  Future<SavePostResult> savePost(FeedPost post) async {
+    if (_savedPostsById.containsKey(post.id)) {
+      return SavePostResult.alreadySaved;
+    }
+
+    _savedPostsById[post.id] = post;
+    return SavePostResult.saved;
+  }
+
+  @override
+  Future<List<FeedPost>> getSavedPosts() async {
+    return _savedPostsById.values.toList(growable: false);
+  }
+
+  @override
+  Future<void> deleteSavedPost(FeedPost post) async {
+    _savedPostsById.remove(post.id);
   }
 }

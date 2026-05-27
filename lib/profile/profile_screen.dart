@@ -5,6 +5,7 @@ import '../comments/comment_screen.dart';
 import '../feed_post_repository.dart';
 import '../home/widgets/feed_post_card.dart';
 import '../mock_data.dart';
+import '../saved_post_repository.dart';
 import '../shared/shared_widgets.dart';
 import 'widgets/achievement_badge.dart';
 import 'widgets/profile_meta.dart';
@@ -17,12 +18,14 @@ class ProfileScreen extends StatefulWidget {
     super.key,
     this.feedPostRepository,
     this.commentRepository,
+    this.savedPostRepository,
     this.onPostUpdated,
     this.refreshToken = 0,
   });
 
   final FeedPostRepository? feedPostRepository;
   final CommentRepository? commentRepository;
+  final SavedPostRepository? savedPostRepository;
   final VoidCallback? onPostUpdated;
   final int refreshToken;
 
@@ -36,16 +39,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   var _selectedTab = 'Postingan';
   late final FeedPostRepository _repository;
   late final CommentRepository _commentRepository;
+  late final SavedPostRepository _savedPostRepository;
   late Future<List<FeedPost>> _postsFuture;
   late Future<List<UserCommentResult>> _commentsFuture;
+  late Future<List<FeedPost>> _savedPostsFuture;
 
   @override
   void initState() {
     super.initState();
     _repository = widget.feedPostRepository ?? FeedPostRepository();
     _commentRepository = widget.commentRepository ?? CommentRepository();
+    _savedPostRepository = widget.savedPostRepository ?? SavedPostRepository();
     _postsFuture = _repository.getPosts();
     _commentsFuture = Future.value(const <UserCommentResult>[]);
+    _savedPostsFuture = Future.value(const <FeedPost>[]);
   }
 
   @override
@@ -60,6 +67,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _postsFuture = _repository.getPosts();
     if (_selectedTab == 'Komentar') {
       _commentsFuture = _commentRepository.getCommentsByAuthor(_profileAuthor);
+    } else if (_selectedTab == 'Disimpan') {
+      _savedPostsFuture = _savedPostRepository.getSavedPosts();
     }
   }
 
@@ -70,8 +79,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _commentsFuture = _commentRepository.getCommentsByAuthor(
           _profileAuthor,
         );
+      } else if (value == 'Disimpan') {
+        _savedPostsFuture = _savedPostRepository.getSavedPosts();
       }
     });
+  }
+
+  void _handlePostSaved() {
+    if (_selectedTab == 'Disimpan') {
+      setState(() {
+        _savedPostsFuture = _savedPostRepository.getSavedPosts();
+      });
+    }
+    widget.onPostUpdated?.call();
+  }
+
+  void _handleSavedPostDeleted() {
+    setState(() {
+      _savedPostsFuture = _savedPostRepository.getSavedPosts();
+    });
+    widget.onPostUpdated?.call();
   }
 
   Future<void> _openComments(FeedPost post) async {
@@ -190,11 +217,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _ProfilePostsTab(
               postsFuture: _postsFuture,
               onOpenComments: _openComments,
+              savedPostRepository: _savedPostRepository,
+              onPostSaved: _handlePostSaved,
             )
           else if (_selectedTab == 'Komentar')
             _ProfileCommentsTab(
               commentsFuture: _commentsFuture,
               onOpenComments: _openComments,
+              savedPostRepository: _savedPostRepository,
+              onPostSaved: _handlePostSaved,
+            )
+          else if (_selectedTab == 'Disimpan')
+            _ProfileSavedPostsTab(
+              savedPostsFuture: _savedPostsFuture,
+              onOpenComments: _openComments,
+              savedPostRepository: _savedPostRepository,
+              onSavedPostDeleted: _handleSavedPostDeleted,
             )
           else
             ProfilePlaceholder(tab: _selectedTab),
@@ -208,12 +246,16 @@ class _ProfilePostsTab extends StatelessWidget {
   const _ProfilePostsTab({
     required this.postsFuture,
     required this.onOpenComments,
+    required this.savedPostRepository,
+    required this.onPostSaved,
   });
 
   static const _profileAuthor = 'sarahmae';
 
   final Future<List<FeedPost>> postsFuture;
   final ValueChanged<FeedPost> onOpenComments;
+  final SavedPostRepository savedPostRepository;
+  final VoidCallback onPostSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -254,6 +296,8 @@ class _ProfilePostsTab extends StatelessWidget {
                 compact: true,
                 framed: true,
                 showActions: true,
+                savedPostRepository: savedPostRepository,
+                onPostSaved: onPostSaved,
                 onOpenComments: () => onOpenComments(posts[i]),
               ),
               if (i != posts.length - 1)
@@ -276,10 +320,14 @@ class _ProfileCommentsTab extends StatelessWidget {
   const _ProfileCommentsTab({
     required this.commentsFuture,
     required this.onOpenComments,
+    required this.savedPostRepository,
+    required this.onPostSaved,
   });
 
   final Future<List<UserCommentResult>> commentsFuture;
   final ValueChanged<FeedPost> onOpenComments;
+  final SavedPostRepository savedPostRepository;
+  final VoidCallback onPostSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -316,6 +364,8 @@ class _ProfileCommentsTab extends StatelessWidget {
               _ProfileCommentResultCard(
                 result: results[i],
                 onOpenComments: () => onOpenComments(results[i].post),
+                savedPostRepository: savedPostRepository,
+                onPostSaved: onPostSaved,
               ),
               if (i != results.length - 1)
                 const Divider(height: 1, thickness: 1, color: kLine),
@@ -331,10 +381,14 @@ class _ProfileCommentResultCard extends StatelessWidget {
   const _ProfileCommentResultCard({
     required this.result,
     required this.onOpenComments,
+    required this.savedPostRepository,
+    required this.onPostSaved,
   });
 
   final UserCommentResult result;
   final VoidCallback onOpenComments;
+  final SavedPostRepository savedPostRepository;
+  final VoidCallback onPostSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -354,11 +408,84 @@ class _ProfileCommentResultCard extends StatelessWidget {
               framed: true,
               showActions: true,
               framedMargin: const EdgeInsets.only(top: 22),
+              savedPostRepository: savedPostRepository,
+              onPostSaved: onPostSaved,
               onOpenComments: onOpenComments,
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ProfileSavedPostsTab extends StatelessWidget {
+  const _ProfileSavedPostsTab({
+    required this.savedPostsFuture,
+    required this.onOpenComments,
+    required this.savedPostRepository,
+    required this.onSavedPostDeleted,
+  });
+
+  final Future<List<FeedPost>> savedPostsFuture;
+  final ValueChanged<FeedPost> onOpenComments;
+  final SavedPostRepository savedPostRepository;
+  final VoidCallback onSavedPostDeleted;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<FeedPost>>(
+      future: savedPostsFuture,
+      builder: (context, snapshot) {
+        final posts = snapshot.data ?? const <FeedPost>[];
+
+        if (snapshot.hasError) {
+          return const _ProfilePostMessage(
+            title: 'Postingan disimpan belum bisa dimuat.',
+            icon: Icons.error_outline_rounded,
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            posts.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 28, bottom: 26),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (posts.isEmpty) {
+          return const _ProfilePostMessage(
+            title: 'Belum ada postingan disimpan.',
+            icon: Icons.bookmark_border_rounded,
+          );
+        }
+
+        return Column(
+          children: [
+            for (var i = 0; i < posts.length; i++) ...[
+              FeedPostCard(
+                post: posts[i],
+                compact: true,
+                framed: true,
+                showActions: true,
+                savedPostRepository: savedPostRepository,
+                onPostSaved: onSavedPostDeleted,
+                savedTabOptions: true,
+                onOpenComments: () => onOpenComments(posts[i]),
+              ),
+              if (i != posts.length - 1)
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 20,
+                  endIndent: 20,
+                  color: kLine,
+                ),
+            ],
+          ],
+        );
+      },
     );
   }
 }

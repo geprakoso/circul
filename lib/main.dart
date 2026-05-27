@@ -7,6 +7,7 @@ import 'home/home_screen.dart';
 import 'map/map_screen.dart';
 import 'mock_data.dart';
 import 'profile/profile_screen.dart';
+import 'saved_post_repository.dart';
 import 'search/search_screen.dart';
 import 'shared/relative_timestamp.dart';
 import 'shared/sarah_avatar.dart';
@@ -16,9 +17,14 @@ void main() {
 }
 
 class CirculApp extends StatelessWidget {
-  const CirculApp({super.key, this.feedPostRepository});
+  const CirculApp({
+    super.key,
+    this.feedPostRepository,
+    this.savedPostRepository,
+  });
 
   final FeedPostRepository? feedPostRepository;
+  final SavedPostRepository? savedPostRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -39,15 +45,23 @@ class CirculApp extends StatelessWidget {
           fontFamily: 'SF Pro Display',
         ),
       ),
-      home: CirculShell(feedPostRepository: feedPostRepository),
+      home: CirculShell(
+        feedPostRepository: feedPostRepository,
+        savedPostRepository: savedPostRepository,
+      ),
     );
   }
 }
 
 class CirculShell extends StatefulWidget {
-  const CirculShell({super.key, this.feedPostRepository});
+  const CirculShell({
+    super.key,
+    this.feedPostRepository,
+    this.savedPostRepository,
+  });
 
   final FeedPostRepository? feedPostRepository;
+  final SavedPostRepository? savedPostRepository;
 
   @override
   State<CirculShell> createState() => _CirculShellState();
@@ -163,6 +177,8 @@ class _CirculShellState extends State<CirculShell> {
         onOpenLocationPost: _openPostLocationOnMap,
         onPostCreated: _refreshPostConsumers,
         onPostUpdated: _refreshPostConsumers,
+        savedPostRepository: widget.savedPostRepository,
+        onPostSaved: _refreshPostConsumers,
         refreshToken: _homeRefreshToken,
       ),
       MapScreen(
@@ -176,11 +192,14 @@ class _CirculShellState extends State<CirculShell> {
       ),
       SearchScreen(
         feedPostRepository: widget.feedPostRepository,
+        savedPostRepository: widget.savedPostRepository,
         onPostUpdated: _refreshPostConsumers,
+        onPostSaved: _refreshPostConsumers,
       ),
       const EventScreen(),
       ProfileScreen(
         feedPostRepository: widget.feedPostRepository,
+        savedPostRepository: widget.savedPostRepository,
         onPostUpdated: _refreshPostConsumers,
         refreshToken: _profileRefreshToken,
       ),

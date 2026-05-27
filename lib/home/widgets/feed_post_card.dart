@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import '../../image_viewer/uploaded_image_fullscreen_page.dart';
 import '../../mock_data.dart';
 import '../../new_post/widgets/attachment_media_strip.dart';
+import '../../saved_post_repository.dart';
 import '../../shared/relative_timestamp.dart';
 import '../../shared/sarah_avatar.dart';
+import 'post_options_bottom_sheet.dart';
 
 class FeedPostCard extends StatelessWidget {
   const FeedPostCard({
@@ -17,6 +19,9 @@ class FeedPostCard extends StatelessWidget {
     this.framed = false,
     this.showActions = false,
     this.framedMargin,
+    this.savedPostRepository,
+    this.onPostSaved,
+    this.savedTabOptions = false,
     this.onOpenComments,
     this.onOpenLocation,
   });
@@ -26,6 +31,9 @@ class FeedPostCard extends StatelessWidget {
   final bool framed;
   final bool showActions;
   final EdgeInsetsGeometry? framedMargin;
+  final SavedPostRepository? savedPostRepository;
+  final VoidCallback? onPostSaved;
+  final bool savedTabOptions;
   final VoidCallback? onOpenComments;
   final VoidCallback? onOpenLocation;
 
@@ -130,7 +138,13 @@ class FeedPostCard extends StatelessWidget {
             ),
             IconButton(
               tooltip: 'Lainnya',
-              onPressed: () {},
+              onPressed: () => showPostOptionsBottomSheet(
+                context,
+                post: post,
+                savedPostRepository: savedPostRepository,
+                onPostSaved: onPostSaved,
+                savedTabMode: savedTabOptions,
+              ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               icon: const Icon(Icons.more_horiz_rounded),

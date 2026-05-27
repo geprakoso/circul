@@ -10,6 +10,7 @@ import '../comments/comment_screen.dart';
 import '../feed_post_repository.dart';
 import '../mock_data.dart';
 import '../new_post/new_post_screen.dart';
+import '../saved_post_repository.dart';
 import '../shared/shared_widgets.dart';
 import 'widgets/feed_post_card.dart';
 
@@ -21,6 +22,8 @@ class HomeScreen extends StatefulWidget {
     this.onOpenLocationPost,
     this.onPostCreated,
     this.onPostUpdated,
+    this.savedPostRepository,
+    this.onPostSaved,
     this.refreshToken = 0,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
@@ -30,6 +33,8 @@ class HomeScreen extends StatefulWidget {
   final ValueChanged<FeedPost>? onOpenLocationPost;
   final VoidCallback? onPostCreated;
   final VoidCallback? onPostUpdated;
+  final SavedPostRepository? savedPostRepository;
+  final VoidCallback? onPostSaved;
   final int refreshToken;
   final ImagePicker? _imagePicker;
 
@@ -216,6 +221,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   final post = posts[index - 1];
                   return FeedPostCard(
                     post: post,
+                    savedPostRepository: widget.savedPostRepository,
+                    onPostSaved: widget.onPostSaved,
                     onOpenComments: () => _openComments(post),
                     onOpenLocation: () => _openLocationPost(post),
                   );

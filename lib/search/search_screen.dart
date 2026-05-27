@@ -4,17 +4,27 @@ import 'package:flutter/material.dart';
 
 import '../comments/comment_screen.dart';
 import '../feed_post_repository.dart';
+import '../home/widgets/post_options_bottom_sheet.dart';
 import '../image_viewer/uploaded_image_fullscreen_page.dart';
 import '../mock_data.dart';
+import '../saved_post_repository.dart';
 import '../shared/relative_timestamp.dart';
 import '../shared/sarah_avatar.dart';
 import 'widgets/topic_row.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key, this.feedPostRepository, this.onPostUpdated});
+  const SearchScreen({
+    super.key,
+    this.feedPostRepository,
+    this.savedPostRepository,
+    this.onPostUpdated,
+    this.onPostSaved,
+  });
 
   final FeedPostRepository? feedPostRepository;
+  final SavedPostRepository? savedPostRepository;
   final VoidCallback? onPostUpdated;
+  final VoidCallback? onPostSaved;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -261,7 +271,12 @@ class _SearchScreenState extends State<SearchScreen> {
         widgets.add(const SizedBox(height: 18));
       }
       widgets.add(
-        _SearchPostResult(post: post, onTap: () => _openPostComments(post)),
+        _SearchPostResult(
+          post: post,
+          savedPostRepository: widget.savedPostRepository,
+          onPostSaved: widget.onPostSaved,
+          onTap: () => _openPostComments(post),
+        ),
       );
       index += 1;
     }
@@ -513,10 +528,17 @@ class _ResultSection extends StatelessWidget {
 }
 
 class _SearchPostResult extends StatelessWidget {
-  const _SearchPostResult({required this.post, required this.onTap});
+  const _SearchPostResult({
+    required this.post,
+    required this.onTap,
+    this.savedPostRepository,
+    this.onPostSaved,
+  });
 
   final FeedPost post;
   final VoidCallback onTap;
+  final SavedPostRepository? savedPostRepository;
+  final VoidCallback? onPostSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -624,7 +646,22 @@ class _SearchPostResult extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.more_horiz_rounded, color: kMuted, size: 24),
+            IconButton(
+              tooltip: 'Lainnya',
+              onPressed: () => showPostOptionsBottomSheet(
+                context,
+                post: post,
+                savedPostRepository: savedPostRepository,
+                onPostSaved: onPostSaved,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              icon: const Icon(
+                Icons.more_horiz_rounded,
+                color: kMuted,
+                size: 24,
+              ),
+            ),
           ],
         ),
       ),

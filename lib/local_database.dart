@@ -8,6 +8,7 @@ class CirculDatabase {
 
   static const feedPostsTable = 'feed_posts';
   static const postCommentsTable = 'post_comments';
+  static const savedPostsTable = 'saved_posts';
 
   Database? _database;
 
@@ -18,7 +19,7 @@ class CirculDatabase {
     final dbPath = await getDatabasesPath();
     final database = await openDatabase(
       p.join(dbPath, 'circul.db'),
-      version: 6,
+      version: 7,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -33,6 +34,7 @@ class CirculDatabase {
   Future<void> _create(Database db, int version) async {
     await _createFeedPostsTable(db);
     await _createPostCommentsTable(db);
+    await _createSavedPostsTable(db);
   }
 
   Future<void> _createFeedPostsTable(Database db) async {
@@ -97,6 +99,22 @@ class CirculDatabase {
     );
   }
 
+  Future<void> _createSavedPostsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $savedPostsTable (
+        post_id TEXT PRIMARY KEY,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY(post_id) REFERENCES $feedPostsTable(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_saved_posts_created_at '
+      'ON $savedPostsTable(created_at DESC)',
+    );
+  }
+
   Future<void> _upgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute(
@@ -150,6 +168,9 @@ class CirculDatabase {
           "ALTER TABLE $postCommentsTable ADD COLUMN location_longitude REAL",
         );
       }
+    }
+    if (oldVersion < 7) {
+      await _createSavedPostsTable(db);
     }
   }
 }
