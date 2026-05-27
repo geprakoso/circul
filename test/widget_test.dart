@@ -1,6 +1,7 @@
 import 'package:circul/feed_post_repository.dart';
 import 'package:circul/main.dart';
 import 'package:circul/mock_data.dart';
+import 'package:circul/profile/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -82,12 +83,69 @@ void main() {
     expect(find.text('Event'), findsWidgets);
     expect(find.text('Aksi Bersih Sungai Pepe'), findsWidgets);
   });
+
+  testWidgets('profile postingan tab renders all posts by Sarah', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProfileScreen(
+            feedPostRepository: _FakeFeedPostRepository(
+              posts: [
+                ...feedPosts,
+                const FeedPost(
+                  author: 'anotheruser',
+                  city: 'Jakarta',
+                  timeAgo: '1 jam',
+                  title: 'Postingan orang lain',
+                  body: 'Ini tidak tampil di profil Sarah.',
+                  imageAsset: cleanupAsset,
+                  likes: 4,
+                  comments: 1,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Tips mengurangi sampah plastik di rumah 🌿'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(
+      find.text('Tips mengurangi sampah plastik di rumah 🌿'),
+      findsOneWidget,
+    );
+
+    await tester.scrollUntilVisible(
+      find.text('Buku tentang lingkungan yang mengubah cara pandangku 📖'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(
+      find.text('Buku tentang lingkungan yang mengubah cara pandangku 📖'),
+      findsOneWidget,
+    );
+    expect(find.text('Bagikan'), findsWidgets);
+    expect(find.byIcon(Icons.favorite_border_rounded), findsWidgets);
+    expect(find.byIcon(Icons.chat_bubble_outline_rounded), findsWidgets);
+    expect(find.byIcon(Icons.reply_rounded), findsWidgets);
+    expect(find.text('Postingan orang lain'), findsNothing);
+  });
 }
 
 class _FakeFeedPostRepository extends FeedPostRepository {
-  _FakeFeedPostRepository();
+  _FakeFeedPostRepository({List<FeedPost>? posts})
+    : _posts = List<FeedPost>.of(posts ?? feedPosts);
 
-  final _posts = List<FeedPost>.of(feedPosts);
+  final List<FeedPost> _posts;
 
   @override
   Future<List<FeedPost>> getPosts() async => _posts;

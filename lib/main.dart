@@ -56,6 +56,7 @@ class CirculShell extends StatefulWidget {
 class _CirculShellState extends State<CirculShell> {
   var _index = 0;
   var _homeRefreshToken = 0;
+  var _profileRefreshToken = 0;
   var _mapCurrentLocationRefreshToken = 0;
   MapFocusedCheckIn? _focusedCheckIn;
   final _issueClusters = <MapIssueCluster>[];
@@ -112,8 +113,11 @@ class _CirculShellState extends State<CirculShell> {
     });
   }
 
-  void _refreshHomePosts() {
-    setState(() => _homeRefreshToken++);
+  void _refreshPostConsumers() {
+    setState(() {
+      _homeRefreshToken++;
+      _profileRefreshToken++;
+    });
   }
 
   void _openPostLocationOnMap(FeedPost post) {
@@ -144,6 +148,8 @@ class _CirculShellState extends State<CirculShell> {
       if (index == 1) {
         _focusedCheckIn = null;
         _mapCurrentLocationRefreshToken++;
+      } else if (index == 4) {
+        _profileRefreshToken++;
       }
     });
   }
@@ -155,20 +161,24 @@ class _CirculShellState extends State<CirculShell> {
         feedPostRepository: widget.feedPostRepository,
         onDownCheckIn: _addHomeCheckInHeatmapLevel,
         onOpenLocationPost: _openPostLocationOnMap,
+        onPostCreated: _refreshPostConsumers,
         refreshToken: _homeRefreshToken,
       ),
       MapScreen(
         issueClusters: _issueClusters,
         feedPostRepository: widget.feedPostRepository,
         onDownCheckIn: _addHeatmapLevel,
-        onPostCreated: _refreshHomePosts,
+        onPostCreated: _refreshPostConsumers,
         onCheckoutCompleted: _removeHeatmapLevel,
         focusedCheckIn: _focusedCheckIn,
         currentLocationRefreshToken: _mapCurrentLocationRefreshToken,
       ),
       SearchScreen(feedPostRepository: widget.feedPostRepository),
       const EventScreen(),
-      const ProfileScreen(),
+      ProfileScreen(
+        feedPostRepository: widget.feedPostRepository,
+        refreshToken: _profileRefreshToken,
+      ),
     ];
 
     return Scaffold(

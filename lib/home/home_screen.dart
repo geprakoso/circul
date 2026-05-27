@@ -19,6 +19,7 @@ class HomeScreen extends StatefulWidget {
     this.feedPostRepository,
     this.onDownCheckIn,
     this.onOpenLocationPost,
+    this.onPostCreated,
     this.refreshToken = 0,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
@@ -26,6 +27,7 @@ class HomeScreen extends StatefulWidget {
   final FeedPostRepository? feedPostRepository;
   final ValueChanged<LatLng>? onDownCheckIn;
   final ValueChanged<FeedPost>? onOpenLocationPost;
+  final VoidCallback? onPostCreated;
   final int refreshToken;
   final ImagePicker? _imagePicker;
 
@@ -65,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _postsFuture = _repository.getPosts();
     });
+    widget.onPostCreated?.call();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Postingan komunitas tersimpan lokal.')),
     );
@@ -93,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _postsFuture = _repository.getPosts();
     });
+    widget.onPostCreated?.call();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Check-in tersimpan sebagai postingan.')),
     );

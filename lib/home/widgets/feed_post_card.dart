@@ -15,6 +15,7 @@ class FeedPostCard extends StatelessWidget {
     required this.post,
     this.compact = false,
     this.framed = false,
+    this.showActions = false,
     this.onOpenComments,
     this.onOpenLocation,
   });
@@ -22,6 +23,7 @@ class FeedPostCard extends StatelessWidget {
   final FeedPost post;
   final bool compact;
   final bool framed;
+  final bool showActions;
   final VoidCallback? onOpenComments;
   final VoidCallback? onOpenLocation;
 
@@ -99,7 +101,7 @@ class FeedPostCard extends StatelessWidget {
                     onTap: onOpenComments,
                     onLocationTap: onOpenLocation,
                   ),
-                  if (!compact) ...[
+                  if (!compact || showActions) ...[
                     const SizedBox(height: 14),
                     Wrap(
                       spacing: 8,

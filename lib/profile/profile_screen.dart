@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../comments/comment_screen.dart';
+import '../feed_post_repository.dart';
 import '../home/widgets/feed_post_card.dart';
 import '../mock_data.dart';
 import '../shared/shared_widgets.dart';
@@ -10,14 +12,46 @@ import 'widgets/profile_stats.dart';
 import 'widgets/segmented_profile_tabs.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({
+    super.key,
+    this.feedPostRepository,
+    this.refreshToken = 0,
+  });
+
+  final FeedPostRepository? feedPostRepository;
+  final int refreshToken;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  static const _profileAuthor = 'sarahmae';
+
   var _selectedTab = 'Postingan';
+  late final FeedPostRepository _repository;
+  late Future<List<FeedPost>> _postsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.feedPostRepository ?? FeedPostRepository();
+    _postsFuture = _repository.getPosts();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken) {
+      _postsFuture = _repository.getPosts();
+    }
+  }
+
+  void _openComments(FeedPost post) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (context) => CommentScreen(post: post)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,9 +154,94 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           if (_selectedTab == 'Postingan')
-            FeedPostCard(post: feedPosts.first, compact: true, framed: true)
+            FutureBuilder<List<FeedPost>>(
+              future: _postsFuture,
+              builder: (context, snapshot) {
+                final posts = (snapshot.data ?? const <FeedPost>[])
+                    .where(
+                      (post) => post.author.toLowerCase() == _profileAuthor,
+                    )
+                    .toList(growable: false);
+
+                if (snapshot.hasError) {
+                  return const _ProfilePostMessage(
+                    title: 'Postingan belum bisa dimuat.',
+                    icon: Icons.error_outline_rounded,
+                  );
+                }
+
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    posts.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 28, bottom: 26),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                if (posts.isEmpty) {
+                  return const _ProfilePostMessage(
+                    title: 'Belum ada postingan.',
+                    icon: Icons.article_outlined,
+                  );
+                }
+
+                return Column(
+                  children: [
+                    for (var i = 0; i < posts.length; i++) ...[
+                      FeedPostCard(
+                        post: posts[i],
+                        compact: true,
+                        framed: true,
+                        showActions: true,
+                        onOpenComments: () => _openComments(posts[i]),
+                      ),
+                      if (i != posts.length - 1)
+                        const Divider(
+                          height: 1,
+                          thickness: 1,
+                          indent: 20,
+                          endIndent: 20,
+                          color: kLine,
+                        ),
+                    ],
+                  ],
+                );
+              },
+            )
           else
             ProfilePlaceholder(tab: _selectedTab),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfilePostMessage extends StatelessWidget {
+  const _ProfilePostMessage({required this.title, required this.icon});
+
+  final String title;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 18, 20, 26),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kLine),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: kCirculGreen, size: 28),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ),
         ],
       ),
     );
