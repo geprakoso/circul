@@ -14,7 +14,7 @@ class SegmentedProfileTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tabs = ['Postingan', 'Komentar', 'Disimpan', 'Aktivitas'];
+    final tabs = ['Postingan', 'Komentar', 'Disimpan'];
     return Container(
       height: 46,
       decoration: BoxDecoration(
