@@ -114,3 +114,55 @@ Seed content comes from `lib/mock_data.dart`, while new posts, comments, saves, 
 ## Current Status
 
 Circul is an interactive prototype rather than a production service. The main product flows are implemented locally, while future backend work would likely add accounts, remote sync, moderation, notifications, and real event/community data.
+
+## Changelog
+
+### 0.0.10 - 2026-05-27
+
+- Added profile feed visibility for user posts.
+- Improved global feed post elements and post card actions.
+- Added reply, save, and like capabilities on feed posts.
+- Added like button animation and refreshed seasonal button animation behavior.
+- Hid activity content that is not ready for the current prototype.
+- Updated the README to describe the current Circul product goal, setup, structure, and local-first status.
+
+### 0.0.9 - 2026-05-25
+
+- Completed the capture result flow for check-ins.
+- Fixed topic behavior on the search screen.
+
+### 0.0.8 - 2026-05-24
+
+- Improved UI scale across the app, including the home screen and comment section.
+- Added macOS dummy camera support for local development.
+- Added placeholder imagery for capture and preview flows.
+- Connected map cards so location posts can open directly on the map.
+- Added a bottom sheet for nearby check-ins.
+
+### 0.0.7 - 2026-05-22
+
+- Added the check-in button and home floating check-in action.
+- Added animated locate-me and flag controls on the map.
+- Added location coordinate input for captured check-ins.
+
+### 0.0.6 - 2026-05-21
+
+- Implemented the OpenStreetMap-based map screen.
+- Added map tile rendering, location-centered interaction, and local impact visualization foundations.
+
+### 0.0.5 - 2026-05-20
+
+- Added feed topics.
+- Refactored the screen structure into feature folders.
+- Added the comment screen and fixed comment submission.
+
+### 0.0.4 - 2026-05-19
+
+- Added image upload routing and scrollable uploaded image previews.
+- Added fullscreen picture preview.
+- Fixed missing picture routing.
+
+### 0.0.1 - 2026-05-18
+
+- Initial runnable Flutter project created.
+- App can be opened and run as the first accessible Circul prototype.
