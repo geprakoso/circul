@@ -1,8 +1,17 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'local_database.dart';
 import 'mock_data.dart';
+
+class UserCommentResult {
+  const UserCommentResult({required this.comment, required this.post});
+
+  final PostComment comment;
+  final FeedPost post;
+}
 
 class CommentRepository {
   CommentRepository({CirculDatabase? database})
@@ -24,6 +33,63 @@ class CommentRepository {
     );
 
     return rows.map(_commentFromRow).toList(growable: false);
+  }
+
+  Future<List<UserCommentResult>> getCommentsByAuthor(String author) async {
+    final cleanAuthor = author.trim();
+    if (cleanAuthor.isEmpty) return const [];
+
+    final db = await _database.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT
+        c.id AS comment_id,
+        c.post_id AS comment_post_id,
+        c.author AS comment_author,
+        c.time_ago AS comment_time_ago,
+        c.body AS comment_body,
+        c.initials AS comment_initials,
+        c.avatar_color AS comment_avatar_color,
+        c.location_enabled AS comment_location_enabled,
+        c.location_label AS comment_location_label,
+        c.coordinate_label AS comment_coordinate_label,
+        c.location_latitude AS comment_location_latitude,
+        c.location_longitude AS comment_location_longitude,
+        c.likes AS comment_likes,
+        p.id AS post_id,
+        p.author AS post_author,
+        p.city AS post_city,
+        p.time_ago AS post_time_ago,
+        p.title AS post_title,
+        p.body AS post_body,
+        p.image_asset AS post_image_asset,
+        p.image_paths AS post_image_paths,
+        p.location_enabled AS post_location_enabled,
+        p.location_label AS post_location_label,
+        p.coordinate_label AS post_coordinate_label,
+        p.location_latitude AS post_location_latitude,
+        p.location_longitude AS post_location_longitude,
+        p.checkout_completed AS post_checkout_completed,
+        p.likes AS post_likes,
+        p.comments AS post_comments,
+        p.topic AS post_topic,
+        p.created_at AS post_created_at
+      FROM ${CirculDatabase.postCommentsTable} c
+      INNER JOIN ${CirculDatabase.feedPostsTable} p ON p.id = c.post_id
+      WHERE lower(c.author) = lower(?)
+      ORDER BY c.created_at DESC
+      ''',
+      [cleanAuthor],
+    );
+
+    return rows
+        .map(
+          (row) => UserCommentResult(
+            comment: _commentFromAuthorRow(row),
+            post: _postFromAuthorRow(row),
+          ),
+        )
+        .toList(growable: false);
   }
 
   Future<PostComment> addComment({
@@ -192,9 +258,64 @@ class CommentRepository {
     );
   }
 
+  PostComment _commentFromAuthorRow(Map<String, Object?> row) {
+    return PostComment(
+      id: row['comment_id'] as String,
+      postId: row['comment_post_id'] as String,
+      author: row['comment_author'] as String,
+      timeAgo: row['comment_time_ago'] as String,
+      body: row['comment_body'] as String,
+      initials: row['comment_initials'] as String,
+      avatarColor: Color(row['comment_avatar_color'] as int),
+      likes: row['comment_likes'] as int,
+      locationEnabled: row['comment_location_enabled'] == 1,
+      locationLabel: row['comment_location_label'] as String?,
+      coordinateLabel: row['comment_coordinate_label'] as String?,
+      locationLatitude: _doubleFromRow(row['comment_location_latitude']),
+      locationLongitude: _doubleFromRow(row['comment_location_longitude']),
+    );
+  }
+
+  FeedPost _postFromAuthorRow(Map<String, Object?> row) {
+    return FeedPost(
+      id: row['post_id'] as String,
+      author: row['post_author'] as String,
+      city: row['post_city'] as String,
+      timeAgo: row['post_time_ago'] as String,
+      title: row['post_title'] as String,
+      body: row['post_body'] as String,
+      imageAsset: row['post_image_asset'] as String,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(
+        row['post_created_at'] as int,
+      ),
+      topic: (row['post_topic'] as String?) ?? '',
+      imagePaths: _imagePathsFromRow(row['post_image_paths']),
+      locationEnabled: row['post_location_enabled'] == 1,
+      locationLabel: row['post_location_label'] as String?,
+      coordinateLabel: row['post_coordinate_label'] as String?,
+      locationLatitude: _doubleFromRow(row['post_location_latitude']),
+      locationLongitude: _doubleFromRow(row['post_location_longitude']),
+      checkoutCompleted: row['post_checkout_completed'] == 1,
+      likes: row['post_likes'] as int,
+      comments: row['post_comments'] as int,
+    );
+  }
+
   double? _doubleFromRow(Object? value) {
     if (value is double) return value;
     if (value is int) return value.toDouble();
     return null;
+  }
+
+  List<String> _imagePathsFromRow(Object? value) {
+    if (value is! String || value.isEmpty) return const [];
+
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is! List) return const [];
+      return decoded.whereType<String>().toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
   }
 }

@@ -1,3 +1,4 @@
+import 'package:circul/comment_repository.dart';
 import 'package:circul/feed_post_repository.dart';
 import 'package:circul/main.dart';
 import 'package:circul/mock_data.dart';
@@ -106,6 +107,7 @@ void main() {
                 ),
               ],
             ),
+            commentRepository: _FakeCommentRepository(),
           ),
         ),
       ),
@@ -138,6 +140,56 @@ void main() {
     expect(find.byIcon(Icons.chat_bubble_outline_rounded), findsWidgets);
     expect(find.byIcon(Icons.reply_rounded), findsWidgets);
     expect(find.text('Postingan orang lain'), findsNothing);
+  });
+
+  testWidgets('profile komentar tab renders user comment with source post', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProfileScreen(
+            feedPostRepository: _FakeFeedPostRepository(),
+            commentRepository: _FakeCommentRepository(
+              results: [
+                UserCommentResult(
+                  comment: const PostComment(
+                    author: 'sarahmae',
+                    timeAgo: 'Baru saja',
+                    body: 'Setuju, ini bisa dicoba di rumah.',
+                    initials: 'SM',
+                    avatarColor: kCirculGreen,
+                  ),
+                  post: feedPosts.first,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Komentar'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Komentar'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Setuju, ini bisa dicoba di rumah.'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('Setuju, ini bisa dicoba di rumah.'), findsOneWidget);
+    expect(
+      find.text('Tips mengurangi sampah plastik di rumah 🌿'),
+      findsOneWidget,
+    );
+    expect(find.text('Bagikan'), findsWidgets);
   });
 }
 
@@ -182,5 +234,17 @@ class _FakeFeedPostRepository extends FeedPostRepository {
         comments: 0,
       ),
     );
+  }
+}
+
+class _FakeCommentRepository extends CommentRepository {
+  _FakeCommentRepository({List<UserCommentResult> results = const []})
+    : _results = results;
+
+  final List<UserCommentResult> _results;
+
+  @override
+  Future<List<UserCommentResult>> getCommentsByAuthor(String author) async {
+    return _results;
   }
 }

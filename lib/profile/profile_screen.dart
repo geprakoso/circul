@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../comment_repository.dart';
 import '../comments/comment_screen.dart';
 import '../feed_post_repository.dart';
 import '../home/widgets/feed_post_card.dart';
@@ -15,11 +16,13 @@ class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     this.feedPostRepository,
+    this.commentRepository,
     this.onPostUpdated,
     this.refreshToken = 0,
   });
 
   final FeedPostRepository? feedPostRepository;
+  final CommentRepository? commentRepository;
   final VoidCallback? onPostUpdated;
   final int refreshToken;
 
@@ -32,21 +35,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   var _selectedTab = 'Postingan';
   late final FeedPostRepository _repository;
+  late final CommentRepository _commentRepository;
   late Future<List<FeedPost>> _postsFuture;
+  late Future<List<UserCommentResult>> _commentsFuture;
 
   @override
   void initState() {
     super.initState();
     _repository = widget.feedPostRepository ?? FeedPostRepository();
+    _commentRepository = widget.commentRepository ?? CommentRepository();
     _postsFuture = _repository.getPosts();
+    _commentsFuture = Future.value(const <UserCommentResult>[]);
   }
 
   @override
   void didUpdateWidget(covariant ProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.refreshToken != widget.refreshToken) {
-      _postsFuture = _repository.getPosts();
+      _refreshProfileFeedData();
     }
+  }
+
+  void _refreshProfileFeedData() {
+    _postsFuture = _repository.getPosts();
+    if (_selectedTab == 'Komentar') {
+      _commentsFuture = _commentRepository.getCommentsByAuthor(_profileAuthor);
+    }
+  }
+
+  void _selectTab(String value) {
+    setState(() {
+      _selectedTab = value;
+      if (value == 'Komentar') {
+        _commentsFuture = _commentRepository.getCommentsByAuthor(
+          _profileAuthor,
+        );
+      }
+    });
   }
 
   Future<void> _openComments(FeedPost post) async {
@@ -56,7 +81,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted || didChange != true) return;
 
     setState(() {
-      _postsFuture = _repository.getPosts();
+      _refreshProfileFeedData();
     });
     widget.onPostUpdated?.call();
   }
@@ -158,67 +183,281 @@ class _ProfileScreenState extends State<ProfileScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: SegmentedProfileTabs(
               selected: _selectedTab,
-              onSelected: (value) => setState(() => _selectedTab = value),
+              onSelected: _selectTab,
             ),
           ),
           if (_selectedTab == 'Postingan')
-            FutureBuilder<List<FeedPost>>(
-              future: _postsFuture,
-              builder: (context, snapshot) {
-                final posts = (snapshot.data ?? const <FeedPost>[])
-                    .where(
-                      (post) => post.author.toLowerCase() == _profileAuthor,
-                    )
-                    .toList(growable: false);
-
-                if (snapshot.hasError) {
-                  return const _ProfilePostMessage(
-                    title: 'Postingan belum bisa dimuat.',
-                    icon: Icons.error_outline_rounded,
-                  );
-                }
-
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    posts.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.only(top: 28, bottom: 26),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-
-                if (posts.isEmpty) {
-                  return const _ProfilePostMessage(
-                    title: 'Belum ada postingan.',
-                    icon: Icons.article_outlined,
-                  );
-                }
-
-                return Column(
-                  children: [
-                    for (var i = 0; i < posts.length; i++) ...[
-                      FeedPostCard(
-                        post: posts[i],
-                        compact: true,
-                        framed: true,
-                        showActions: true,
-                        onOpenComments: () => _openComments(posts[i]),
-                      ),
-                      if (i != posts.length - 1)
-                        const Divider(
-                          height: 1,
-                          thickness: 1,
-                          indent: 20,
-                          endIndent: 20,
-                          color: kLine,
-                        ),
-                    ],
-                  ],
-                );
-              },
+            _ProfilePostsTab(
+              postsFuture: _postsFuture,
+              onOpenComments: _openComments,
+            )
+          else if (_selectedTab == 'Komentar')
+            _ProfileCommentsTab(
+              commentsFuture: _commentsFuture,
+              onOpenComments: _openComments,
             )
           else
             ProfilePlaceholder(tab: _selectedTab),
         ],
+      ),
+    );
+  }
+}
+
+class _ProfilePostsTab extends StatelessWidget {
+  const _ProfilePostsTab({
+    required this.postsFuture,
+    required this.onOpenComments,
+  });
+
+  static const _profileAuthor = 'sarahmae';
+
+  final Future<List<FeedPost>> postsFuture;
+  final ValueChanged<FeedPost> onOpenComments;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<FeedPost>>(
+      future: postsFuture,
+      builder: (context, snapshot) {
+        final posts = (snapshot.data ?? const <FeedPost>[])
+            .where((post) => post.author.toLowerCase() == _profileAuthor)
+            .toList(growable: false);
+
+        if (snapshot.hasError) {
+          return const _ProfilePostMessage(
+            title: 'Postingan belum bisa dimuat.',
+            icon: Icons.error_outline_rounded,
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            posts.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 28, bottom: 26),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (posts.isEmpty) {
+          return const _ProfilePostMessage(
+            title: 'Belum ada postingan.',
+            icon: Icons.article_outlined,
+          );
+        }
+
+        return Column(
+          children: [
+            for (var i = 0; i < posts.length; i++) ...[
+              FeedPostCard(
+                post: posts[i],
+                compact: true,
+                framed: true,
+                showActions: true,
+                onOpenComments: () => onOpenComments(posts[i]),
+              ),
+              if (i != posts.length - 1)
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 20,
+                  endIndent: 20,
+                  color: kLine,
+                ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ProfileCommentsTab extends StatelessWidget {
+  const _ProfileCommentsTab({
+    required this.commentsFuture,
+    required this.onOpenComments,
+  });
+
+  final Future<List<UserCommentResult>> commentsFuture;
+  final ValueChanged<FeedPost> onOpenComments;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<UserCommentResult>>(
+      future: commentsFuture,
+      builder: (context, snapshot) {
+        final results = snapshot.data ?? const <UserCommentResult>[];
+
+        if (snapshot.hasError) {
+          return const _ProfilePostMessage(
+            title: 'Komentar belum bisa dimuat.',
+            icon: Icons.error_outline_rounded,
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            results.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 28, bottom: 26),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (results.isEmpty) {
+          return const _ProfilePostMessage(
+            title: 'Belum ada komentar.',
+            icon: Icons.chat_bubble_outline_rounded,
+          );
+        }
+
+        return Column(
+          children: [
+            for (var i = 0; i < results.length; i++) ...[
+              _ProfileCommentResultCard(
+                result: results[i],
+                onOpenComments: () => onOpenComments(results[i].post),
+              ),
+              if (i != results.length - 1)
+                const Divider(height: 1, thickness: 1, color: kLine),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ProfileCommentResultCard extends StatelessWidget {
+  const _ProfileCommentResultCard({
+    required this.result,
+    required this.onOpenComments,
+  });
+
+  final UserCommentResult result;
+  final VoidCallback onOpenComments;
+
+  @override
+  Widget build(BuildContext context) {
+    const contentInset = 76.0;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 26, bottom: 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ProfileCommentRow(comment: result.comment),
+          Padding(
+            padding: const EdgeInsets.only(left: contentInset, right: 20),
+            child: FeedPostCard(
+              post: result.post,
+              compact: true,
+              framed: true,
+              showActions: true,
+              framedMargin: const EdgeInsets.only(top: 22),
+              onOpenComments: onOpenComments,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileCommentRow extends StatelessWidget {
+  const _ProfileCommentRow({required this.comment});
+
+  final PostComment comment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 16, 0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: comment.avatarColor,
+            child: Text(
+              comment.initials,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 22,
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      comment.author,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const _Dot(),
+                    Text(
+                      comment.timeAgo,
+                      style: const TextStyle(
+                        color: kMuted,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  comment.body,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 20,
+                    height: 1.35,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          IconButton(
+            tooltip: 'Sukai komentar',
+            onPressed: () {},
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 42, minHeight: 42),
+            icon: const Icon(
+              Icons.favorite_border_rounded,
+              color: kMuted,
+              size: 32,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  const _Dot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: const BoxDecoration(
+        color: Colors.black,
+        shape: BoxShape.circle,
       ),
     );
   }

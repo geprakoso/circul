@@ -16,6 +16,7 @@ class FeedPostCard extends StatelessWidget {
     this.compact = false,
     this.framed = false,
     this.showActions = false,
+    this.framedMargin,
     this.onOpenComments,
     this.onOpenLocation,
   });
@@ -24,6 +25,7 @@ class FeedPostCard extends StatelessWidget {
   final bool compact;
   final bool framed;
   final bool showActions;
+  final EdgeInsetsGeometry? framedMargin;
   final VoidCallback? onOpenComments;
   final VoidCallback? onOpenLocation;
 
@@ -159,7 +161,7 @@ class FeedPostCard extends StatelessWidget {
     }
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+      margin: framedMargin ?? const EdgeInsets.fromLTRB(18, 14, 18, 20),
       padding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
       decoration: BoxDecoration(
         color: Colors.white,
