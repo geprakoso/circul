@@ -6,8 +6,10 @@ import '../comments/comment_screen.dart';
 import '../feed_post_repository.dart';
 import '../home/widgets/post_options_bottom_sheet.dart';
 import '../image_viewer/uploaded_image_fullscreen_page.dart';
+import '../liked_post_repository.dart';
 import '../mock_data.dart';
 import '../saved_post_repository.dart';
+import '../shared/animated_like_icon.dart';
 import '../shared/relative_timestamp.dart';
 import '../shared/sarah_avatar.dart';
 import 'widgets/topic_row.dart';
@@ -17,14 +19,18 @@ class SearchScreen extends StatefulWidget {
     super.key,
     this.feedPostRepository,
     this.savedPostRepository,
+    this.likedPostRepository,
     this.onPostUpdated,
     this.onPostSaved,
+    this.onPostLiked,
   });
 
   final FeedPostRepository? feedPostRepository;
   final SavedPostRepository? savedPostRepository;
+  final LikedPostRepository? likedPostRepository;
   final VoidCallback? onPostUpdated;
   final VoidCallback? onPostSaved;
+  final VoidCallback? onPostLiked;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -275,6 +281,8 @@ class _SearchScreenState extends State<SearchScreen> {
           post: post,
           savedPostRepository: widget.savedPostRepository,
           onPostSaved: widget.onPostSaved,
+          likedPostRepository: widget.likedPostRepository,
+          onPostLiked: widget.onPostLiked,
           onTap: () => _openPostComments(post),
         ),
       );
@@ -285,7 +293,12 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<void> _openPostComments(FeedPost post) async {
     final didChange = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(builder: (context) => CommentScreen(post: post)),
+      MaterialPageRoute<bool>(
+        builder: (context) => CommentScreen(
+          post: post,
+          likedPostRepository: widget.likedPostRepository,
+        ),
+      ),
     );
     if (!mounted || didChange != true) return;
 
@@ -533,12 +546,16 @@ class _SearchPostResult extends StatelessWidget {
     required this.onTap,
     this.savedPostRepository,
     this.onPostSaved,
+    this.likedPostRepository,
+    this.onPostLiked,
   });
 
   final FeedPost post;
   final VoidCallback onTap;
   final SavedPostRepository? savedPostRepository;
   final VoidCallback? onPostSaved;
+  final LikedPostRepository? likedPostRepository;
+  final VoidCallback? onPostLiked;
 
   @override
   Widget build(BuildContext context) {
@@ -629,9 +646,10 @@ class _SearchPostResult extends StatelessWidget {
                     spacing: 10,
                     runSpacing: 8,
                     children: [
-                      _MiniAction(
-                        icon: Icons.favorite_border_rounded,
-                        text: '${post.likes}',
+                      _SearchLikeAction(
+                        post: post,
+                        likedPostRepository: likedPostRepository,
+                        onPostLiked: onPostLiked,
                       ),
                       _MiniAction(
                         icon: Icons.chat_bubble_outline_rounded,
@@ -900,14 +918,24 @@ class _TopicPill extends StatelessWidget {
 }
 
 class _MiniAction extends StatelessWidget {
-  const _MiniAction({required this.icon, required this.text});
+  const _MiniAction({
+    required this.icon,
+    required this.text,
+    this.onTap,
+    this.selected = false,
+    this.iconWidget,
+  });
 
   final IconData icon;
   final String text;
+  final VoidCallback? onTap;
+  final bool selected;
+  final Widget? iconWidget;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final color = selected ? kCirculGreen : kMuted;
+    final content = Container(
       height: 38,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
@@ -917,18 +945,104 @@ class _MiniAction extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: kMuted, size: 20),
+          iconWidget ?? Icon(icon, color: color, size: 20),
           const SizedBox(width: 8),
           Text(
             text,
-            style: const TextStyle(
-              color: kMuted,
+            style: TextStyle(
+              color: color,
               fontSize: 14,
-              fontWeight: FontWeight.w700,
+              fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
             ),
           ),
         ],
       ),
+    );
+
+    if (onTap == null) return content;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: content,
+    );
+  }
+}
+
+class _SearchLikeAction extends StatefulWidget {
+  const _SearchLikeAction({
+    required this.post,
+    this.likedPostRepository,
+    this.onPostLiked,
+  });
+
+  final FeedPost post;
+  final LikedPostRepository? likedPostRepository;
+  final VoidCallback? onPostLiked;
+
+  @override
+  State<_SearchLikeAction> createState() => _SearchLikeActionState();
+}
+
+class _SearchLikeActionState extends State<_SearchLikeAction> {
+  late final LikedPostRepository _repository;
+  late var _likes = widget.post.likes;
+  var _isLiked = false;
+  var _isToggling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.likedPostRepository ?? LikedPostRepository();
+    _loadLikedState();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SearchLikeAction oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.id != widget.post.id ||
+        oldWidget.post.likes != widget.post.likes) {
+      _likes = widget.post.likes;
+      _loadLikedState();
+    }
+  }
+
+  Future<void> _loadLikedState() async {
+    final isLiked = await _repository.isLiked(widget.post);
+    if (!mounted) return;
+    setState(() => _isLiked = isLiked);
+  }
+
+  Future<void> _toggleLike() async {
+    if (_isToggling) return;
+
+    setState(() => _isToggling = true);
+    try {
+      final result = await _repository.toggleLike(widget.post);
+      if (!mounted) return;
+      setState(() {
+        _isLiked = result.isLiked;
+        _likes = result.likes;
+      });
+      widget.onPostLiked?.call();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Like gagal disimpan.')));
+    } finally {
+      if (mounted) setState(() => _isToggling = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _MiniAction(
+      icon: Icons.favorite_border_rounded,
+      iconWidget: AnimatedLikeIcon(isLiked: _isLiked, size: 22),
+      text: '$_likes',
+      selected: _isLiked,
+      onTap: _toggleLike,
     );
   }
 }

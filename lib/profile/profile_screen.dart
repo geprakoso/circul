@@ -4,6 +4,7 @@ import '../comment_repository.dart';
 import '../comments/comment_screen.dart';
 import '../feed_post_repository.dart';
 import '../home/widgets/feed_post_card.dart';
+import '../liked_post_repository.dart';
 import '../mock_data.dart';
 import '../saved_post_repository.dart';
 import '../shared/shared_widgets.dart';
@@ -19,6 +20,7 @@ class ProfileScreen extends StatefulWidget {
     this.feedPostRepository,
     this.commentRepository,
     this.savedPostRepository,
+    this.likedPostRepository,
     this.onPostUpdated,
     this.refreshToken = 0,
   });
@@ -26,6 +28,7 @@ class ProfileScreen extends StatefulWidget {
   final FeedPostRepository? feedPostRepository;
   final CommentRepository? commentRepository;
   final SavedPostRepository? savedPostRepository;
+  final LikedPostRepository? likedPostRepository;
   final VoidCallback? onPostUpdated;
   final int refreshToken;
 
@@ -40,6 +43,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final FeedPostRepository _repository;
   late final CommentRepository _commentRepository;
   late final SavedPostRepository _savedPostRepository;
+  late final LikedPostRepository _likedPostRepository;
   late Future<List<FeedPost>> _postsFuture;
   late Future<List<UserCommentResult>> _commentsFuture;
   late Future<List<FeedPost>> _savedPostsFuture;
@@ -50,6 +54,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _repository = widget.feedPostRepository ?? FeedPostRepository();
     _commentRepository = widget.commentRepository ?? CommentRepository();
     _savedPostRepository = widget.savedPostRepository ?? SavedPostRepository();
+    _likedPostRepository = widget.likedPostRepository ?? LikedPostRepository();
     _postsFuture = _repository.getPosts();
     _commentsFuture = Future.value(const <UserCommentResult>[]);
     _savedPostsFuture = Future.value(const <FeedPost>[]);
@@ -101,9 +106,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     widget.onPostUpdated?.call();
   }
 
+  void _handlePostLiked() {
+    setState(() {
+      _refreshProfileFeedData();
+    });
+    widget.onPostUpdated?.call();
+  }
+
   Future<void> _openComments(FeedPost post) async {
     final didChange = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(builder: (context) => CommentScreen(post: post)),
+      MaterialPageRoute<bool>(
+        builder: (context) => CommentScreen(
+          post: post,
+          likedPostRepository: _likedPostRepository,
+        ),
+      ),
     );
     if (!mounted || didChange != true) return;
 
@@ -219,6 +236,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onOpenComments: _openComments,
               savedPostRepository: _savedPostRepository,
               onPostSaved: _handlePostSaved,
+              likedPostRepository: _likedPostRepository,
+              onPostLiked: _handlePostLiked,
             )
           else if (_selectedTab == 'Komentar')
             _ProfileCommentsTab(
@@ -226,6 +245,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onOpenComments: _openComments,
               savedPostRepository: _savedPostRepository,
               onPostSaved: _handlePostSaved,
+              likedPostRepository: _likedPostRepository,
+              onPostLiked: _handlePostLiked,
             )
           else if (_selectedTab == 'Disimpan')
             _ProfileSavedPostsTab(
@@ -233,6 +254,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onOpenComments: _openComments,
               savedPostRepository: _savedPostRepository,
               onSavedPostDeleted: _handleSavedPostDeleted,
+              likedPostRepository: _likedPostRepository,
+              onPostLiked: _handlePostLiked,
             )
           else
             ProfilePlaceholder(tab: _selectedTab),
@@ -248,6 +271,8 @@ class _ProfilePostsTab extends StatelessWidget {
     required this.onOpenComments,
     required this.savedPostRepository,
     required this.onPostSaved,
+    required this.likedPostRepository,
+    required this.onPostLiked,
   });
 
   static const _profileAuthor = 'sarahmae';
@@ -256,6 +281,8 @@ class _ProfilePostsTab extends StatelessWidget {
   final ValueChanged<FeedPost> onOpenComments;
   final SavedPostRepository savedPostRepository;
   final VoidCallback onPostSaved;
+  final LikedPostRepository likedPostRepository;
+  final VoidCallback onPostLiked;
 
   @override
   Widget build(BuildContext context) {
@@ -298,6 +325,8 @@ class _ProfilePostsTab extends StatelessWidget {
                 showActions: true,
                 savedPostRepository: savedPostRepository,
                 onPostSaved: onPostSaved,
+                likedPostRepository: likedPostRepository,
+                onPostLiked: onPostLiked,
                 onOpenComments: () => onOpenComments(posts[i]),
               ),
               if (i != posts.length - 1)
@@ -322,12 +351,16 @@ class _ProfileCommentsTab extends StatelessWidget {
     required this.onOpenComments,
     required this.savedPostRepository,
     required this.onPostSaved,
+    required this.likedPostRepository,
+    required this.onPostLiked,
   });
 
   final Future<List<UserCommentResult>> commentsFuture;
   final ValueChanged<FeedPost> onOpenComments;
   final SavedPostRepository savedPostRepository;
   final VoidCallback onPostSaved;
+  final LikedPostRepository likedPostRepository;
+  final VoidCallback onPostLiked;
 
   @override
   Widget build(BuildContext context) {
@@ -366,6 +399,8 @@ class _ProfileCommentsTab extends StatelessWidget {
                 onOpenComments: () => onOpenComments(results[i].post),
                 savedPostRepository: savedPostRepository,
                 onPostSaved: onPostSaved,
+                likedPostRepository: likedPostRepository,
+                onPostLiked: onPostLiked,
               ),
               if (i != results.length - 1)
                 const Divider(height: 1, thickness: 1, color: kLine),
@@ -383,12 +418,16 @@ class _ProfileCommentResultCard extends StatelessWidget {
     required this.onOpenComments,
     required this.savedPostRepository,
     required this.onPostSaved,
+    required this.likedPostRepository,
+    required this.onPostLiked,
   });
 
   final UserCommentResult result;
   final VoidCallback onOpenComments;
   final SavedPostRepository savedPostRepository;
   final VoidCallback onPostSaved;
+  final LikedPostRepository likedPostRepository;
+  final VoidCallback onPostLiked;
 
   @override
   Widget build(BuildContext context) {
@@ -410,6 +449,8 @@ class _ProfileCommentResultCard extends StatelessWidget {
               framedMargin: const EdgeInsets.only(top: 22),
               savedPostRepository: savedPostRepository,
               onPostSaved: onPostSaved,
+              likedPostRepository: likedPostRepository,
+              onPostLiked: onPostLiked,
               onOpenComments: onOpenComments,
             ),
           ),
@@ -425,12 +466,16 @@ class _ProfileSavedPostsTab extends StatelessWidget {
     required this.onOpenComments,
     required this.savedPostRepository,
     required this.onSavedPostDeleted,
+    required this.likedPostRepository,
+    required this.onPostLiked,
   });
 
   final Future<List<FeedPost>> savedPostsFuture;
   final ValueChanged<FeedPost> onOpenComments;
   final SavedPostRepository savedPostRepository;
   final VoidCallback onSavedPostDeleted;
+  final LikedPostRepository likedPostRepository;
+  final VoidCallback onPostLiked;
 
   @override
   Widget build(BuildContext context) {
@@ -472,6 +517,8 @@ class _ProfileSavedPostsTab extends StatelessWidget {
                 savedPostRepository: savedPostRepository,
                 onPostSaved: onSavedPostDeleted,
                 savedTabOptions: true,
+                likedPostRepository: likedPostRepository,
+                onPostLiked: onPostLiked,
                 onOpenComments: () => onOpenComments(posts[i]),
               ),
               if (i != posts.length - 1)

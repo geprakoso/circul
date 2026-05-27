@@ -1,10 +1,12 @@
 import 'package:circul/comment_repository.dart';
 import 'package:circul/feed_post_repository.dart';
 import 'package:circul/home/widgets/feed_post_card.dart';
+import 'package:circul/liked_post_repository.dart';
 import 'package:circul/main.dart';
 import 'package:circul/mock_data.dart';
 import 'package:circul/profile/profile_screen.dart';
 import 'package:circul/saved_post_repository.dart';
+import 'package:circul/shared/animated_like_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -290,16 +292,52 @@ void main() {
     expect(find.text('Report'), findsOneWidget);
   });
 
+  testWidgets('feed post like toggles count and selected state', (
+    tester,
+  ) async {
+    final likedRepository = _FakeLikedPostRepository();
+    final post = feedPosts.first.copyWith(id: 'seed_1', likes: 7);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FeedPostCard(post: post, likedPostRepository: likedRepository),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('7'), findsOneWidget);
+    expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.favorite_border_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('8'), findsOneWidget);
+    expect(find.byType(AnimatedLikeIcon), findsOneWidget);
+
+    await tester.tap(find.text('8'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('7'), findsOneWidget);
+    expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
+  });
+
   testWidgets('save option stores post and shows saved state in profile', (
     tester,
   ) async {
     final savedRepository = _FakeSavedPostRepository();
+    final likedRepository = _FakeLikedPostRepository();
     final post = feedPosts.first.copyWith(id: 'seed_1');
 
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: FeedPostCard(post: post, savedPostRepository: savedRepository),
+          body: FeedPostCard(
+            post: post,
+            savedPostRepository: savedRepository,
+            likedPostRepository: likedRepository,
+          ),
         ),
       ),
     );
@@ -326,6 +364,7 @@ void main() {
             feedPostRepository: _FakeFeedPostRepository(posts: [post]),
             commentRepository: _FakeCommentRepository(),
             savedPostRepository: savedRepository,
+            likedPostRepository: likedRepository,
           ),
         ),
       ),
@@ -355,6 +394,7 @@ void main() {
 
   testWidgets('saved tab menu only deletes saved entry', (tester) async {
     final savedRepository = _FakeSavedPostRepository();
+    final likedRepository = _FakeLikedPostRepository();
     final post = feedPosts.first.copyWith(id: 'seed_1');
     await savedRepository.savePost(post);
 
@@ -365,6 +405,7 @@ void main() {
             feedPostRepository: _FakeFeedPostRepository(posts: [post]),
             commentRepository: _FakeCommentRepository(),
             savedPostRepository: savedRepository,
+            likedPostRepository: likedRepository,
           ),
         ),
       ),
@@ -493,5 +534,32 @@ class _FakeSavedPostRepository extends SavedPostRepository {
   @override
   Future<void> deleteSavedPost(FeedPost post) async {
     _savedPostsById.remove(post.id);
+  }
+}
+
+class _FakeLikedPostRepository extends LikedPostRepository {
+  final _likedPostIds = <String>{};
+  final _likesByPostId = <String, int>{};
+
+  @override
+  Future<bool> isLiked(FeedPost post) async {
+    return _likedPostIds.contains(post.id);
+  }
+
+  @override
+  Future<LikePostResult> toggleLike(FeedPost post) async {
+    final currentLikes = _likesByPostId[post.id] ?? post.likes;
+
+    if (_likedPostIds.contains(post.id)) {
+      _likedPostIds.remove(post.id);
+      final likes = currentLikes > 0 ? currentLikes - 1 : 0;
+      _likesByPostId[post.id] = likes;
+      return LikePostResult(isLiked: false, likes: likes);
+    }
+
+    _likedPostIds.add(post.id);
+    final likes = currentLikes + 1;
+    _likesByPostId[post.id] = likes;
+    return LikePostResult(isLiked: true, likes: likes);
   }
 }

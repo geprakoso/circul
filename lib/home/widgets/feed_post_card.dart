@@ -4,14 +4,16 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../image_viewer/uploaded_image_fullscreen_page.dart';
+import '../../liked_post_repository.dart';
 import '../../mock_data.dart';
 import '../../new_post/widgets/attachment_media_strip.dart';
 import '../../saved_post_repository.dart';
+import '../../shared/animated_like_icon.dart';
 import '../../shared/relative_timestamp.dart';
 import '../../shared/sarah_avatar.dart';
 import 'post_options_bottom_sheet.dart';
 
-class FeedPostCard extends StatelessWidget {
+class FeedPostCard extends StatefulWidget {
   const FeedPostCard({
     super.key,
     required this.post,
@@ -22,6 +24,8 @@ class FeedPostCard extends StatelessWidget {
     this.savedPostRepository,
     this.onPostSaved,
     this.savedTabOptions = false,
+    this.likedPostRepository,
+    this.onPostLiked,
     this.onOpenComments,
     this.onOpenLocation,
   });
@@ -34,18 +38,75 @@ class FeedPostCard extends StatelessWidget {
   final SavedPostRepository? savedPostRepository;
   final VoidCallback? onPostSaved;
   final bool savedTabOptions;
+  final LikedPostRepository? likedPostRepository;
+  final VoidCallback? onPostLiked;
   final VoidCallback? onOpenComments;
   final VoidCallback? onOpenLocation;
 
   @override
+  State<FeedPostCard> createState() => _FeedPostCardState();
+}
+
+class _FeedPostCardState extends State<FeedPostCard> {
+  late final LikedPostRepository _likedPostRepository;
+  late var _likes = widget.post.likes;
+  var _isLiked = false;
+  var _isTogglingLike = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _likedPostRepository = widget.likedPostRepository ?? LikedPostRepository();
+    _loadLikedState();
+  }
+
+  @override
+  void didUpdateWidget(covariant FeedPostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post.id != widget.post.id ||
+        oldWidget.post.likes != widget.post.likes) {
+      _likes = widget.post.likes;
+      _loadLikedState();
+    }
+  }
+
+  Future<void> _loadLikedState() async {
+    final isLiked = await _likedPostRepository.isLiked(widget.post);
+    if (!mounted) return;
+    setState(() => _isLiked = isLiked);
+  }
+
+  Future<void> _toggleLike() async {
+    if (_isTogglingLike) return;
+
+    setState(() => _isTogglingLike = true);
+    try {
+      final result = await _likedPostRepository.toggleLike(widget.post);
+      if (!mounted) return;
+      setState(() {
+        _isLiked = result.isLiked;
+        _likes = result.likes;
+      });
+      widget.onPostLiked?.call();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Like gagal disimpan.')));
+    } finally {
+      if (mounted) setState(() => _isTogglingLike = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final title = post.title.trim();
-    final topic = post.topic.trim();
+    final title = widget.post.title.trim();
+    final topic = widget.post.topic.trim();
     final showTitle =
         title.isNotEmpty && title.toLowerCase() != topic.toLowerCase();
-    final timestamp = post.createdAt == null
-        ? post.timeAgo
-        : formatRelativeTimestamp(post.createdAt!);
+    final timestamp = widget.post.createdAt == null
+        ? widget.post.timeAgo
+        : formatRelativeTimestamp(widget.post.createdAt!);
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,7 +114,7 @@ class FeedPostCard extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SarahAvatar(radius: compact ? 20 : 24),
+            SarahAvatar(radius: widget.compact ? 20 : 24),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -63,17 +124,17 @@ class FeedPostCard extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          compact ? 'Sarah Mae' : post.author,
+                          widget.compact ? 'Sarah Mae' : widget.post.author,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
-                                fontSize: compact ? 15 : 16,
+                                fontSize: widget.compact ? 15 : 16,
                                 fontWeight: FontWeight.w800,
                               ),
                         ),
                       ),
-                      if (!compact && post.topic.isNotEmpty) ...[
+                      if (!widget.compact && widget.post.topic.isNotEmpty) ...[
                         const SizedBox(width: 8),
-                        _Pill(text: post.topic),
+                        _Pill(text: widget.post.topic),
                         const SizedBox(width: 8),
                         const _Dot(),
                       ],
@@ -99,19 +160,19 @@ class FeedPostCard extends StatelessWidget {
                   ],
                   const SizedBox(height: 8),
                   Text(
-                    post.body,
+                    widget.post.body,
                     style: Theme.of(
                       context,
                     ).textTheme.bodyLarge?.copyWith(height: 1.45, color: kInk),
                   ),
                   const SizedBox(height: 14),
                   _PostMediaStrip(
-                    post: post,
-                    compact: compact,
-                    onTap: onOpenComments,
-                    onLocationTap: onOpenLocation,
+                    post: widget.post,
+                    compact: widget.compact,
+                    onTap: widget.onOpenComments,
+                    onLocationTap: widget.onOpenLocation,
                   ),
-                  if (!compact || showActions) ...[
+                  if (!widget.compact || widget.showActions) ...[
                     const SizedBox(height: 14),
                     Wrap(
                       spacing: 8,
@@ -119,12 +180,15 @@ class FeedPostCard extends StatelessWidget {
                       children: [
                         _ActionButton(
                           icon: Icons.favorite_border_rounded,
-                          text: '${post.likes}',
+                          iconWidget: AnimatedLikeIcon(isLiked: _isLiked),
+                          text: '$_likes',
+                          selected: _isLiked,
+                          onTap: _toggleLike,
                         ),
                         _ActionButton(
                           icon: Icons.chat_bubble_outline_rounded,
-                          text: '${post.comments}',
-                          onTap: onOpenComments,
+                          text: '${widget.post.comments}',
+                          onTap: widget.onOpenComments,
                         ),
                         const _ActionButton(
                           icon: Icons.reply_rounded,
@@ -140,10 +204,10 @@ class FeedPostCard extends StatelessWidget {
               tooltip: 'Lainnya',
               onPressed: () => showPostOptionsBottomSheet(
                 context,
-                post: post,
-                savedPostRepository: savedPostRepository,
-                onPostSaved: onPostSaved,
-                savedTabMode: savedTabOptions,
+                post: widget.post,
+                savedPostRepository: widget.savedPostRepository,
+                onPostSaved: widget.onPostSaved,
+                savedTabMode: widget.savedTabOptions,
               ),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
@@ -154,28 +218,28 @@ class FeedPostCard extends StatelessWidget {
         ),
       ],
     );
-    final tappableContent = onOpenComments == null
+    final tappableContent = widget.onOpenComments == null
         ? content
         : GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onTap: onOpenComments,
+            onTap: widget.onOpenComments,
             child: content,
           );
 
-    if (!framed) {
+    if (!widget.framed) {
       return Padding(
         padding: EdgeInsets.fromLTRB(
           20,
-          compact ? 14 : 22,
+          widget.compact ? 14 : 22,
           16,
-          compact ? 8 : 22,
+          widget.compact ? 8 : 22,
         ),
         child: tappableContent,
       );
     }
 
     return Container(
-      margin: framedMargin ?? const EdgeInsets.fromLTRB(18, 14, 18, 20),
+      margin: widget.framedMargin ?? const EdgeInsets.fromLTRB(18, 14, 18, 20),
       padding: const EdgeInsets.fromLTRB(16, 16, 6, 16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -455,28 +519,37 @@ class _Dot extends StatelessWidget {
 }
 
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.icon, required this.text, this.onTap});
+  const _ActionButton({
+    required this.icon,
+    required this.text,
+    this.onTap,
+    this.selected = false,
+    this.iconWidget,
+  });
 
   final IconData icon;
   final String text;
   final VoidCallback? onTap;
+  final bool selected;
+  final Widget? iconWidget;
 
   @override
   Widget build(BuildContext context) {
+    final color = selected ? kCirculGreen : kMuted;
     final content = Container(
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: kMuted, size: 19),
+          iconWidget ?? Icon(icon, color: color, size: 19),
           const SizedBox(width: 6),
           Text(
             text,
-            style: const TextStyle(
-              color: kMuted,
+            style: TextStyle(
+              color: color,
               fontSize: 13,
-              fontWeight: FontWeight.w600,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
             ),
           ),
         ],

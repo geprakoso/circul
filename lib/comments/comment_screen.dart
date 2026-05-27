@@ -2,14 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../comment_repository.dart';
 import '../home/widgets/feed_post_card.dart';
+import '../liked_post_repository.dart';
 import '../mock_data.dart';
 import '../new_post/widgets/attachment_media_strip.dart';
 
 class CommentScreen extends StatefulWidget {
-  const CommentScreen({super.key, required this.post, this.commentRepository});
+  const CommentScreen({
+    super.key,
+    required this.post,
+    this.commentRepository,
+    this.likedPostRepository,
+  });
 
   final FeedPost post;
   final CommentRepository? commentRepository;
+  final LikedPostRepository? likedPostRepository;
 
   @override
   State<CommentScreen> createState() => _CommentScreenState();
@@ -18,6 +25,7 @@ class CommentScreen extends StatefulWidget {
 class _CommentScreenState extends State<CommentScreen> {
   final _controller = TextEditingController();
   late final CommentRepository _repository;
+  late final LikedPostRepository _likedPostRepository;
   late Future<List<PostComment>> _commentsFuture;
   late FeedPost _post;
   var _isSubmitting = false;
@@ -29,6 +37,7 @@ class _CommentScreenState extends State<CommentScreen> {
   void initState() {
     super.initState();
     _repository = widget.commentRepository ?? CommentRepository();
+    _likedPostRepository = widget.likedPostRepository ?? LikedPostRepository();
     _post = widget.post;
     _commentsFuture = _repository.getComments(_post);
     _controller.addListener(() => setState(() {}));
@@ -74,6 +83,10 @@ class _CommentScreenState extends State<CommentScreen> {
     });
   }
 
+  void _handlePostLiked() {
+    setState(() => _hasChanges = true);
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope<bool>(
@@ -98,7 +111,11 @@ class _CommentScreenState extends State<CommentScreen> {
                     return ListView(
                       padding: const EdgeInsets.only(bottom: 24),
                       children: [
-                        FeedPostCard(post: _post),
+                        FeedPostCard(
+                          post: _post,
+                          likedPostRepository: _likedPostRepository,
+                          onPostLiked: _handlePostLiked,
+                        ),
                         const Divider(height: 1, color: kLine),
                         if (snapshot.connectionState ==
                                 ConnectionState.waiting &&

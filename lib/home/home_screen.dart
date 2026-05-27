@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import '../check_in/capture_result_screen.dart';
 import '../comments/comment_screen.dart';
 import '../feed_post_repository.dart';
+import '../liked_post_repository.dart';
 import '../mock_data.dart';
 import '../new_post/new_post_screen.dart';
 import '../saved_post_repository.dart';
@@ -24,6 +25,8 @@ class HomeScreen extends StatefulWidget {
     this.onPostUpdated,
     this.savedPostRepository,
     this.onPostSaved,
+    this.likedPostRepository,
+    this.onPostLiked,
     this.refreshToken = 0,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
@@ -35,6 +38,8 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback? onPostUpdated;
   final SavedPostRepository? savedPostRepository;
   final VoidCallback? onPostSaved;
+  final LikedPostRepository? likedPostRepository;
+  final VoidCallback? onPostLiked;
   final int refreshToken;
   final ImagePicker? _imagePicker;
 
@@ -82,7 +87,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openComments(FeedPost post) async {
     final didChange = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(builder: (context) => CommentScreen(post: post)),
+      MaterialPageRoute<bool>(
+        builder: (context) => CommentScreen(
+          post: post,
+          likedPostRepository: widget.likedPostRepository,
+        ),
+      ),
     );
     if (!mounted || didChange != true) return;
 
@@ -223,6 +233,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     post: post,
                     savedPostRepository: widget.savedPostRepository,
                     onPostSaved: widget.onPostSaved,
+                    likedPostRepository: widget.likedPostRepository,
+                    onPostLiked: widget.onPostLiked,
                     onOpenComments: () => _openComments(post),
                     onOpenLocation: () => _openLocationPost(post),
                   );
