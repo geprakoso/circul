@@ -52,6 +52,8 @@ class _FeedPostCardState extends State<FeedPostCard> {
   late var _likes = widget.post.likes;
   var _isLiked = false;
   var _isTogglingLike = false;
+  var _hasPlayedLikeAnimation = false;
+  var _animateLike = false;
 
   @override
   void initState() {
@@ -65,6 +67,10 @@ class _FeedPostCardState extends State<FeedPostCard> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.post.id != widget.post.id ||
         oldWidget.post.likes != widget.post.likes) {
+      if (oldWidget.post.id != widget.post.id) {
+        _hasPlayedLikeAnimation = false;
+      }
+      _animateLike = false;
       _likes = widget.post.likes;
       _loadLikedState();
     }
@@ -73,7 +79,11 @@ class _FeedPostCardState extends State<FeedPostCard> {
   Future<void> _loadLikedState() async {
     final isLiked = await _likedPostRepository.isLiked(widget.post);
     if (!mounted) return;
-    setState(() => _isLiked = isLiked);
+    setState(() {
+      _isLiked = isLiked;
+      _hasPlayedLikeAnimation = _hasPlayedLikeAnimation || isLiked;
+      _animateLike = false;
+    });
   }
 
   Future<void> _toggleLike() async {
@@ -84,6 +94,10 @@ class _FeedPostCardState extends State<FeedPostCard> {
       final result = await _likedPostRepository.toggleLike(widget.post);
       if (!mounted) return;
       setState(() {
+        _animateLike = result.isLiked && !_hasPlayedLikeAnimation;
+        if (result.isLiked) {
+          _hasPlayedLikeAnimation = true;
+        }
         _isLiked = result.isLiked;
         _likes = result.likes;
       });
@@ -180,7 +194,10 @@ class _FeedPostCardState extends State<FeedPostCard> {
                       children: [
                         _ActionButton(
                           icon: Icons.favorite_border_rounded,
-                          iconWidget: AnimatedLikeIcon(isLiked: _isLiked),
+                          iconWidget: AnimatedLikeIcon(
+                            isLiked: _isLiked,
+                            animate: _animateLike,
+                          ),
                           text: '$_likes',
                           selected: _isLiked,
                           onTap: _toggleLike,

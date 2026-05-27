@@ -47,6 +47,11 @@ class _AnimatedLikeIconState extends State<AnimatedLikeIcon>
       } else {
         _controller.forward(from: 0);
       }
+    } else if (!oldWidget.isLiked && widget.isLiked) {
+      _playWhenLoaded = false;
+      if (_controller.duration != null) {
+        _controller.value = 1;
+      }
     } else if (oldWidget.isLiked && !widget.isLiked) {
       setState(() => _isPlaying = false);
       _playWhenLoaded = false;

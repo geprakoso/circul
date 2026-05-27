@@ -989,6 +989,8 @@ class _SearchLikeActionState extends State<_SearchLikeAction> {
   late var _likes = widget.post.likes;
   var _isLiked = false;
   var _isToggling = false;
+  var _hasPlayedLikeAnimation = false;
+  var _animateLike = false;
 
   @override
   void initState() {
@@ -1002,6 +1004,10 @@ class _SearchLikeActionState extends State<_SearchLikeAction> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.post.id != widget.post.id ||
         oldWidget.post.likes != widget.post.likes) {
+      if (oldWidget.post.id != widget.post.id) {
+        _hasPlayedLikeAnimation = false;
+      }
+      _animateLike = false;
       _likes = widget.post.likes;
       _loadLikedState();
     }
@@ -1010,7 +1016,11 @@ class _SearchLikeActionState extends State<_SearchLikeAction> {
   Future<void> _loadLikedState() async {
     final isLiked = await _repository.isLiked(widget.post);
     if (!mounted) return;
-    setState(() => _isLiked = isLiked);
+    setState(() {
+      _isLiked = isLiked;
+      _hasPlayedLikeAnimation = _hasPlayedLikeAnimation || isLiked;
+      _animateLike = false;
+    });
   }
 
   Future<void> _toggleLike() async {
@@ -1021,6 +1031,10 @@ class _SearchLikeActionState extends State<_SearchLikeAction> {
       final result = await _repository.toggleLike(widget.post);
       if (!mounted) return;
       setState(() {
+        _animateLike = result.isLiked && !_hasPlayedLikeAnimation;
+        if (result.isLiked) {
+          _hasPlayedLikeAnimation = true;
+        }
         _isLiked = result.isLiked;
         _likes = result.likes;
       });
@@ -1039,7 +1053,11 @@ class _SearchLikeActionState extends State<_SearchLikeAction> {
   Widget build(BuildContext context) {
     return _MiniAction(
       icon: Icons.favorite_border_rounded,
-      iconWidget: AnimatedLikeIcon(isLiked: _isLiked, size: 22),
+      iconWidget: AnimatedLikeIcon(
+        isLiked: _isLiked,
+        size: 22,
+        animate: _animateLike,
+      ),
       text: '$_likes',
       selected: _isLiked,
       onTap: _toggleLike,
