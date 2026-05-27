@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
@@ -22,6 +24,7 @@ const _osmUserAgentPackageName = String.fromEnvironment(
   'OSM_USER_AGENT_PACKAGE_NAME',
   defaultValue: 'com.example.circul',
 );
+const _nominatimHost = 'nominatim.openstreetmap.org';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({
@@ -56,6 +59,8 @@ class _MapScreenState extends State<MapScreen>
   static const _visibleBoundsRefreshDelay = Duration(milliseconds: 280);
 
   final _mapController = MapController();
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   late final AnimationController _cameraAnimationController;
   late final FeedPostRepository _repository;
   late final CommentRepository _commentRepository;
@@ -63,9 +68,12 @@ class _MapScreenState extends State<MapScreen>
   var _currentLocation = _gondangManisCenter;
   var _isLocating = false;
   var _isResolvingLocation = false;
+  var _isSearchingLocation = false;
   var _flagMenuExpanded = false;
   var _feedCheckIns = <FeedPost>[];
   _VisibleCheckIn? _selectedCheckIn;
+  LatLng? _searchedLocation;
+  String? _searchedLocationLabel;
   DateTime? _lastResolvedLocationAt;
   Timer? _visibleBoundsRefreshTimer;
   LatLngBounds? _visibleBounds;
@@ -86,6 +94,8 @@ class _MapScreenState extends State<MapScreen>
   @override
   void dispose() {
     _visibleBoundsRefreshTimer?.cancel();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     _cameraAnimationController.dispose();
     _mapController.dispose();
     super.dispose();
@@ -184,6 +194,14 @@ class _MapScreenState extends State<MapScreen>
                     alignment: Alignment.topCenter,
                     child: const _FocusedCheckInMarker(),
                   ),
+                if (_searchedLocation case final searchedLocation?)
+                  Marker(
+                    point: searchedLocation,
+                    width: 58,
+                    height: 58,
+                    alignment: Alignment.topCenter,
+                    child: _SearchResultMarker(label: _searchedLocationLabel),
+                  ),
               ],
             ),
             const RichAttributionWidget(
@@ -193,6 +211,24 @@ class _MapScreenState extends State<MapScreen>
               ],
             ),
           ],
+        ),
+        Positioned(
+          top: 0,
+          left: 16,
+          right: 16,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: _MapSearchBar(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                isSearching: _isSearchingLocation,
+                onSubmitted: _searchMapLocation,
+                onClear: _clearMapSearch,
+              ),
+            ),
+          ),
         ),
         Positioned(
           right: 16,
@@ -247,6 +283,128 @@ class _MapScreenState extends State<MapScreen>
     } catch (_) {
       if (mounted) setState(() => _feedCheckIns = const []);
     }
+  }
+
+  Future<void> _searchMapLocation(String value) async {
+    final query = value.trim();
+    if (query.isEmpty || _isSearchingLocation) return;
+
+    _searchFocusNode.unfocus();
+    setState(() {
+      _isSearchingLocation = true;
+      _flagMenuExpanded = false;
+      _selectedCheckIn = null;
+    });
+
+    try {
+      final coordinate = _parseCoordinate(query);
+      final point = coordinate ?? await _geocodeQuery(query);
+      if (!mounted) return;
+
+      if (point == null) {
+        _showLocationMessage('Lokasi tidak ditemukan.');
+        return;
+      }
+
+      setState(() {
+        _searchedLocation = point;
+        _searchedLocationLabel = query;
+      });
+      _animateMapTo(point, 17);
+    } catch (_) {
+      if (!mounted) return;
+      _showLocationMessage('Tidak bisa mencari lokasi itu sekarang.');
+    } finally {
+      if (mounted) setState(() => _isSearchingLocation = false);
+    }
+  }
+
+  Future<LatLng?> _geocodeQuery(String query) async {
+    try {
+      final locations = await locationFromAddress(
+        query,
+      ).timeout(const Duration(seconds: 8));
+      if (locations.isNotEmpty) {
+        final location = locations.first;
+        return LatLng(location.latitude, location.longitude);
+      }
+    } catch (_) {
+      // Some Android devices/emulators have no native geocoder backend.
+    }
+
+    return _searchOpenStreetMapLocation(query);
+  }
+
+  Future<LatLng?> _searchOpenStreetMapLocation(String query) async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+    try {
+      final uri = Uri.https(_nominatimHost, '/search', {
+        'format': 'jsonv2',
+        'limit': '1',
+        'q': query,
+        'accept-language': 'id,en',
+      });
+      final request = await client
+          .getUrl(uri)
+          .timeout(const Duration(seconds: 8));
+      request.headers
+        ..set(HttpHeaders.acceptHeader, 'application/json')
+        ..set(
+          HttpHeaders.userAgentHeader,
+          '$_osmUserAgentPackageName map-search',
+        );
+
+      final response = await request.close().timeout(
+        const Duration(seconds: 8),
+      );
+      if (response.statusCode != HttpStatus.ok) {
+        throw const HttpException('OpenStreetMap search failed.');
+      }
+
+      final body = await utf8.decodeStream(response);
+      final results = jsonDecode(body);
+      if (results is! List || results.isEmpty) return null;
+
+      final firstResult = results.first;
+      if (firstResult is! Map<String, dynamic>) return null;
+
+      final latitude = double.tryParse(firstResult['lat']?.toString() ?? '');
+      final longitude = double.tryParse(firstResult['lon']?.toString() ?? '');
+      if (latitude == null || longitude == null) return null;
+
+      return LatLng(latitude, longitude);
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  LatLng? _parseCoordinate(String query) {
+    final coordinatePattern = RegExp(
+      r'^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$',
+    );
+    final match = coordinatePattern.firstMatch(query);
+    if (match == null) return null;
+
+    final latitude = double.tryParse(match.group(1)!);
+    final longitude = double.tryParse(match.group(2)!);
+    if (latitude == null || longitude == null) return null;
+    if (latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      return null;
+    }
+
+    return LatLng(latitude, longitude);
+  }
+
+  void _clearMapSearch() {
+    _searchController.clear();
+    _searchFocusNode.unfocus();
+    setState(() {
+      _searchedLocation = null;
+      _searchedLocationLabel = null;
+    });
   }
 
   void _openCheckInDetail(_VisibleCheckIn item) {
@@ -706,6 +864,86 @@ class _LatLngTween extends Tween<LatLng> {
     return LatLng(
       start.latitude + (target.latitude - start.latitude) * t,
       start.longitude + (target.longitude - start.longitude) * t,
+    );
+  }
+}
+
+class _MapSearchBar extends StatelessWidget {
+  const _MapSearchBar({
+    required this.controller,
+    required this.focusNode,
+    required this.isSearching,
+    required this.onSubmitted,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool isSearching;
+  final ValueChanged<String> onSubmitted;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      elevation: 5,
+      shadowColor: const Color(0x26000000),
+      child: SizedBox(
+        height: 54,
+        child: ValueListenableBuilder<TextEditingValue>(
+          valueListenable: controller,
+          builder: (context, value, child) {
+            final hasText = value.text.trim().isNotEmpty;
+
+            return TextField(
+              controller: controller,
+              focusNode: focusNode,
+              enabled: !isSearching,
+              textInputAction: TextInputAction.search,
+              onSubmitted: onSubmitted,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: kInk,
+                fontWeight: FontWeight.w700,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Cari lokasi di map',
+                hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: kMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: kMuted,
+                  size: 24,
+                ),
+                suffixIcon: isSearching
+                    ? const Padding(
+                        padding: EdgeInsets.all(15),
+                        child: SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2.4),
+                        ),
+                      )
+                    : hasText
+                    ? IconButton(
+                        tooltip: 'Hapus pencarian',
+                        onPressed: onClear,
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: kMuted,
+                          size: 22,
+                        ),
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.fromLTRB(0, 16, 14, 15),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -1512,6 +1750,61 @@ class _FocusedCheckInMarker extends StatelessWidget {
           child: const Icon(Icons.flag_rounded, color: Colors.white, size: 20),
         ),
       ],
+    );
+  }
+}
+
+class _SearchResultMarker extends StatelessWidget {
+  const _SearchResultMarker({this.label});
+
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label == null
+          ? 'Hasil pencarian lokasi'
+          : 'Hasil pencarian $label',
+      child: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          Positioned(
+            top: 7,
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2563EB).withValues(alpha: .18),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: const Color(0xFF2563EB).withValues(alpha: .34),
+                ),
+              ),
+            ),
+          ),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFF2563EB),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x33000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.place_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
