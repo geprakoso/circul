@@ -66,6 +66,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(FlutterMap), findsOneWidget);
     expect(find.byType(TileLayer), findsOneWidget);
+    expect(find.text('Check-in nearby'), findsNothing);
     expect(
       find.widgetWithText(TextField, 'Cari lokasi di map'),
       findsOneWidget,

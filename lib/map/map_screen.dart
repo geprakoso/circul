@@ -58,8 +58,10 @@ class _MapScreenState extends State<MapScreen>
     with SingleTickerProviderStateMixin {
   static const _visibleBoundsRefreshDelay = Duration(milliseconds: 280);
   static const _searchSuggestionDelay = Duration(milliseconds: 420);
+  static const _initialCheckInSheetSize = .22;
 
   final _mapController = MapController();
+  final _checkInSheetController = DraggableScrollableController();
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
   late final AnimationController _cameraAnimationController;
@@ -81,6 +83,7 @@ class _MapScreenState extends State<MapScreen>
   Timer? _visibleBoundsRefreshTimer;
   Timer? _searchSuggestionDebounce;
   LatLngBounds? _visibleBounds;
+  double _checkInSheetSize = _initialCheckInSheetSize;
   int _searchSuggestionRequestId = 0;
 
   @override
@@ -93,6 +96,7 @@ class _MapScreenState extends State<MapScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
+    _checkInSheetController.addListener(_rememberCheckInSheetSize);
     _loadFeedCheckIns();
   }
 
@@ -100,6 +104,9 @@ class _MapScreenState extends State<MapScreen>
   void dispose() {
     _visibleBoundsRefreshTimer?.cancel();
     _searchSuggestionDebounce?.cancel();
+    _checkInSheetController
+      ..removeListener(_rememberCheckInSheetSize)
+      ..dispose();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _cameraAnimationController.dispose();
@@ -116,7 +123,11 @@ class _MapScreenState extends State<MapScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         setState(() => _flagMenuExpanded = false);
-        _animateMapTo(focusedCheckIn.point, 17);
+        _animateMapTo(
+          focusedCheckIn.point,
+          17,
+          screenOffset: _bottomSheetCameraOffset(),
+        );
       });
     }
 
@@ -137,6 +148,14 @@ class _MapScreenState extends State<MapScreen>
   @override
   Widget build(BuildContext context) {
     final visibleCheckIns = _visibleCheckIns();
+    final visiblePostRecords = visibleCheckIns
+        .where((item) => item.isPostRecord)
+        .toList(growable: false);
+    final showCheckInBottomSheet = visiblePostRecords.isNotEmpty;
+    final selectedCheckIn = _selectedCheckIn;
+    final showCheckInListSheet =
+        showCheckInBottomSheet && selectedCheckIn == null;
+    final showAnyMapSheet = showCheckInListSheet || selectedCheckIn != null;
 
     return Stack(
       children: [
@@ -242,7 +261,7 @@ class _MapScreenState extends State<MapScreen>
         ),
         Positioned(
           right: 16,
-          bottom: 192,
+          bottom: showAnyMapSheet ? 192 : 24,
           child: _LocateButton(
             isLoading: _isLocating,
             onPressed: () => _centerToCurrentLocation(),
@@ -250,7 +269,7 @@ class _MapScreenState extends State<MapScreen>
         ),
         Positioned(
           right: 16,
-          bottom: 252,
+          bottom: showAnyMapSheet ? 252 : 84,
           child: _FlagActionMenu(
             expanded: _flagMenuExpanded,
             onToggle: () =>
@@ -259,17 +278,26 @@ class _MapScreenState extends State<MapScreen>
             onCheckOut: () => _showLocationMessage('Check-out dipilih.'),
           ),
         ),
-        _CheckInBottomSheet(
-          items: visibleCheckIns,
-          onItemTap: _openCheckInDetail,
-        ),
-        if (_selectedCheckIn != null)
-          _CheckInDetailSheet(
-            item: _selectedCheckIn!,
-            onClose: () => setState(() => _selectedCheckIn = null),
-            onCheckout: _selectedCheckIn!.post == null
-                ? null
-                : () => _openCheckoutCamera(_selectedCheckIn!),
+        if (showAnyMapSheet)
+          Positioned.fill(
+            child: _MapSheetSwitcher(
+              child: selectedCheckIn == null
+                  ? _CheckInBottomSheet(
+                      key: const ValueKey('check-in-list-sheet'),
+                      controller: _checkInSheetController,
+                      initialChildSize: _checkInSheetSize,
+                      items: visiblePostRecords,
+                      onItemTap: _openCheckInDetail,
+                    )
+                  : _CheckInDetailSheet(
+                      key: ValueKey('check-in-detail-${selectedCheckIn.title}'),
+                      item: selectedCheckIn,
+                      onClose: () => setState(() => _selectedCheckIn = null),
+                      onCheckout: selectedCheckIn.post == null
+                          ? null
+                          : () => _openCheckoutCamera(selectedCheckIn),
+                    ),
+            ),
           ),
       ],
     );
@@ -519,9 +547,15 @@ class _MapScreenState extends State<MapScreen>
     });
   }
 
+  void _rememberCheckInSheetSize() {
+    if (!_checkInSheetController.isAttached || _selectedCheckIn != null) return;
+    _checkInSheetSize = _checkInSheetController.size.clamp(.15, 1);
+  }
+
   void _openCheckInDetail(_VisibleCheckIn item) {
+    _rememberCheckInSheetSize();
     setState(() => _selectedCheckIn = item);
-    _animateMapTo(item.point, 17);
+    _animateMapTo(item.point, 17, screenOffset: _detailSheetCameraOffset());
   }
 
   Future<void> _openCheckoutCamera(_VisibleCheckIn item) async {
@@ -750,11 +784,48 @@ class _MapScreenState extends State<MapScreen>
     widget.onPostCreated?.call();
   }
 
-  void _animateMapTo(LatLng center, double zoom) {
+  Offset _bottomSheetCameraOffset() {
+    final height = MediaQuery.sizeOf(context).height;
+    return Offset(0, -height * .12);
+  }
+
+  Offset _detailSheetCameraOffset() {
+    final height = MediaQuery.sizeOf(context).height;
+    return Offset(0, -height * .28);
+  }
+
+  LatLng _centerAdjustedForScreenOffset(
+    LatLng center,
+    double zoom,
+    Offset offset,
+  ) {
+    if (offset == Offset.zero) return center;
+
+    final camera = _mapController.camera;
+    final point = camera.projectAtZoom(center, zoom);
+    return camera.unprojectAtZoom(
+      camera.rotatePoint(point, point - offset),
+      zoom,
+    );
+  }
+
+  void _animateMapTo(
+    LatLng center,
+    double zoom, {
+    Offset screenOffset = Offset.zero,
+  }) {
     _cameraAnimationController.stop();
+    final adjustedCenter = _centerAdjustedForScreenOffset(
+      center,
+      zoom,
+      screenOffset,
+    );
 
     final centerAnimation =
-        _LatLngTween(begin: _mapController.camera.center, end: center).animate(
+        _LatLngTween(
+          begin: _mapController.camera.center,
+          end: adjustedCenter,
+        ).animate(
           CurvedAnimation(
             parent: _cameraAnimationController,
             curve: Curves.easeOutCubic,
@@ -966,6 +1037,8 @@ class _VisibleCheckIn {
   final List<String> imagePaths;
   final FeedPost? post;
   final bool isFocused;
+
+  bool get isPostRecord => isFocused || post != null;
 
   int get imageCount => imagePaths.length + (imageAsset.isEmpty ? 0 : 1);
 
@@ -1413,20 +1486,70 @@ class _FlagMenuAction extends StatelessWidget {
   }
 }
 
-class _CheckInBottomSheet extends StatelessWidget {
-  const _CheckInBottomSheet({required this.items, required this.onItemTap});
+class _MapSheetSwitcher extends StatelessWidget {
+  const _MapSheetSwitcher({required this.child});
 
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      reverseDuration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          alignment: Alignment.bottomCenter,
+          children: [...previousChildren, ?currentChild],
+        );
+      },
+      transitionBuilder: (child, animation) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return FadeTransition(
+          opacity: curvedAnimation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, .08),
+              end: Offset.zero,
+            ).animate(curvedAnimation),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+class _CheckInBottomSheet extends StatelessWidget {
+  const _CheckInBottomSheet({
+    super.key,
+    required this.controller,
+    required this.initialChildSize,
+    required this.items,
+    required this.onItemTap,
+  });
+
+  final DraggableScrollableController controller;
+  final double initialChildSize;
   final List<_VisibleCheckIn> items;
   final ValueChanged<_VisibleCheckIn> onItemTap;
 
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: .22,
+      controller: controller,
+      initialChildSize: initialChildSize,
       minChildSize: .15,
-      maxChildSize: .56,
+      maxChildSize: 1,
       snap: true,
-      snapSizes: const [.22, .56],
+      snapSizes: const [.22, .56, 1],
       builder: (context, scrollController) {
         return DecoratedBox(
           decoration: const BoxDecoration(
@@ -1440,84 +1563,34 @@ class _CheckInBottomSheet extends StatelessWidget {
               ),
             ],
           ),
-          child: ListView(
+          child: CustomScrollView(
             controller: scrollController,
-            padding: const EdgeInsets.fromLTRB(18, 9, 18, 18),
-            children: [
-              Center(
-                child: Container(
-                  width: 34,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD1D5DB),
-                    borderRadius: BorderRadius.circular(999),
+            slivers: [
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _CheckInSheetHeaderDelegate(itemCount: items.length),
+              ),
+              if (items.isEmpty)
+                const SliverPadding(
+                  padding: EdgeInsets.fromLTRB(18, 0, 18, 18),
+                  sliver: SliverToBoxAdapter(child: _EmptyCheckInResult()),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      for (var i = 0; i < items.length; i++) ...[
+                        _CheckInResultTile(
+                          item: items[i],
+                          onTap: () => onItemTap(items[i]),
+                        ),
+                        if (i < items.length - 1)
+                          const Divider(height: 1, color: kLine),
+                      ],
+                    ]),
                   ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Check-in nearby',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                color: kInk,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w900,
-                              ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          items.isEmpty
-                              ? 'Tidak ada titik di area layar'
-                              : '${items.length} titik terlihat di area layar',
-                          style: const TextStyle(
-                            color: kMuted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: kSoftGreen,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '${items.length}',
-                      style: const TextStyle(
-                        color: kCirculGreen,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              const Divider(height: 1, color: kLine),
-              if (items.isEmpty)
-                const _EmptyCheckInResult()
-              else
-                for (var i = 0; i < items.length; i++) ...[
-                  _CheckInResultTile(
-                    item: items[i],
-                    onTap: () => onItemTap(items[i]),
-                  ),
-                  if (i < items.length - 1)
-                    const Divider(height: 1, color: kLine),
-                ],
             ],
           ),
         );
@@ -1526,8 +1599,120 @@ class _CheckInBottomSheet extends StatelessWidget {
   }
 }
 
+class _CheckInSheetHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _CheckInSheetHeaderDelegate({required this.itemCount});
+
+  static const _height = 104.0;
+
+  final int itemCount;
+
+  @override
+  double get minExtent => _height;
+
+  @override
+  double get maxExtent => _height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: overlapsContent
+            ? const [
+                BoxShadow(
+                  color: Color(0x12000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 3),
+                ),
+              ]
+            : null,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 9, 18, 0),
+        child: Column(
+          children: [
+            Center(
+              child: Container(
+                width: 34,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1D5DB),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Check-in nearby',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: kInk,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        itemCount == 0
+                            ? 'Tidak ada titik di area layar'
+                            : '$itemCount titik terlihat di area layar',
+                        style: const TextStyle(
+                          color: kMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: kSoftGreen,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$itemCount',
+                    style: const TextStyle(
+                      color: kCirculGreen,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            const Divider(height: 1, color: kLine),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _CheckInSheetHeaderDelegate oldDelegate) {
+    return oldDelegate.itemCount != itemCount;
+  }
+}
+
 class _CheckInDetailSheet extends StatelessWidget {
   const _CheckInDetailSheet({
+    super.key,
     required this.item,
     required this.onClose,
     required this.onCheckout,
