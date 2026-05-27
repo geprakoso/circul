@@ -70,6 +70,12 @@ void main() {
       find.widgetWithText(TextField, 'Cari lokasi di map'),
       findsOneWidget,
     );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Cari lokasi di map'),
+      '-7.5584, 110.8199',
+    );
+    await tester.pump();
+    expect(find.text('Gunakan koordinat ini'), findsOneWidget);
     expect(find.byIcon(Icons.my_location_rounded), findsOneWidget);
     expect(find.byIcon(Icons.flag_outlined), findsOneWidget);
 

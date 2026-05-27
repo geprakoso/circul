@@ -57,6 +57,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen>
     with SingleTickerProviderStateMixin {
   static const _visibleBoundsRefreshDelay = Duration(milliseconds: 280);
+  static const _searchSuggestionDelay = Duration(milliseconds: 420);
 
   final _mapController = MapController();
   final _searchController = TextEditingController();
@@ -69,14 +70,18 @@ class _MapScreenState extends State<MapScreen>
   var _isLocating = false;
   var _isResolvingLocation = false;
   var _isSearchingLocation = false;
+  var _isLoadingLocationSuggestions = false;
   var _flagMenuExpanded = false;
   var _feedCheckIns = <FeedPost>[];
+  var _locationSuggestions = <_MapLocationSuggestion>[];
   _VisibleCheckIn? _selectedCheckIn;
   LatLng? _searchedLocation;
   String? _searchedLocationLabel;
   DateTime? _lastResolvedLocationAt;
   Timer? _visibleBoundsRefreshTimer;
+  Timer? _searchSuggestionDebounce;
   LatLngBounds? _visibleBounds;
+  int _searchSuggestionRequestId = 0;
 
   @override
   void initState() {
@@ -94,6 +99,7 @@ class _MapScreenState extends State<MapScreen>
   @override
   void dispose() {
     _visibleBoundsRefreshTimer?.cancel();
+    _searchSuggestionDebounce?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _cameraAnimationController.dispose();
@@ -224,7 +230,11 @@ class _MapScreenState extends State<MapScreen>
                 controller: _searchController,
                 focusNode: _searchFocusNode,
                 isSearching: _isSearchingLocation,
+                isLoadingSuggestions: _isLoadingLocationSuggestions,
+                suggestions: _locationSuggestions,
+                onChanged: _queueMapLocationSuggestions,
                 onSubmitted: _searchMapLocation,
+                onSuggestionTap: _selectMapLocationSuggestion,
                 onClear: _clearMapSearch,
               ),
             ),
@@ -289,9 +299,13 @@ class _MapScreenState extends State<MapScreen>
     final query = value.trim();
     if (query.isEmpty || _isSearchingLocation) return;
 
+    _searchSuggestionDebounce?.cancel();
+    _searchSuggestionRequestId++;
     _searchFocusNode.unfocus();
     setState(() {
       _isSearchingLocation = true;
+      _isLoadingLocationSuggestions = false;
+      _locationSuggestions = const [];
       _flagMenuExpanded = false;
       _selectedCheckIn = null;
     });
@@ -309,6 +323,8 @@ class _MapScreenState extends State<MapScreen>
       setState(() {
         _searchedLocation = point;
         _searchedLocationLabel = query;
+        _locationSuggestions = const [];
+        _isLoadingLocationSuggestions = false;
       });
       _animateMapTo(point, 17);
     } catch (_) {
@@ -317,6 +333,72 @@ class _MapScreenState extends State<MapScreen>
     } finally {
       if (mounted) setState(() => _isSearchingLocation = false);
     }
+  }
+
+  void _queueMapLocationSuggestions(String value) {
+    final query = value.trim();
+    _searchSuggestionDebounce?.cancel();
+    final requestId = ++_searchSuggestionRequestId;
+
+    final coordinate = _parseCoordinate(query);
+    if (coordinate != null) {
+      setState(() {
+        _isLoadingLocationSuggestions = false;
+        _locationSuggestions = [
+          _MapLocationSuggestion(
+            title: 'Gunakan koordinat ini',
+            subtitle: query,
+            point: coordinate,
+          ),
+        ];
+      });
+      return;
+    }
+
+    if (query.length < 3) {
+      setState(() {
+        _isLoadingLocationSuggestions = false;
+        _locationSuggestions = const [];
+      });
+      return;
+    }
+
+    setState(() => _isLoadingLocationSuggestions = true);
+    _searchSuggestionDebounce = Timer(_searchSuggestionDelay, () async {
+      try {
+        final suggestions = await _searchOpenStreetMapLocations(
+          query,
+          limit: 5,
+        );
+        if (!mounted || requestId != _searchSuggestionRequestId) return;
+        setState(() {
+          _locationSuggestions = suggestions;
+          _isLoadingLocationSuggestions = false;
+        });
+      } catch (_) {
+        if (!mounted || requestId != _searchSuggestionRequestId) return;
+        setState(() {
+          _locationSuggestions = const [];
+          _isLoadingLocationSuggestions = false;
+        });
+      }
+    });
+  }
+
+  void _selectMapLocationSuggestion(_MapLocationSuggestion suggestion) {
+    _searchSuggestionDebounce?.cancel();
+    _searchSuggestionRequestId++;
+    _searchFocusNode.unfocus();
+    _searchController.text = suggestion.title;
+    setState(() {
+      _searchedLocation = suggestion.point;
+      _searchedLocationLabel = suggestion.title;
+      _locationSuggestions = const [];
+      _isLoadingLocationSuggestions = false;
+      _flagMenuExpanded = false;
+      _selectedCheckIn = null;
+    });
+    _animateMapTo(suggestion.point, 17);
   }
 
   Future<LatLng?> _geocodeQuery(String query) async {
@@ -336,11 +418,20 @@ class _MapScreenState extends State<MapScreen>
   }
 
   Future<LatLng?> _searchOpenStreetMapLocation(String query) async {
+    final suggestions = await _searchOpenStreetMapLocations(query, limit: 1);
+    if (suggestions.isEmpty) return null;
+    return suggestions.first.point;
+  }
+
+  Future<List<_MapLocationSuggestion>> _searchOpenStreetMapLocations(
+    String query, {
+    required int limit,
+  }) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
     try {
       final uri = Uri.https(_nominatimHost, '/search', {
         'format': 'jsonv2',
-        'limit': '1',
+        'limit': '$limit',
         'q': query,
         'accept-language': 'id,en',
       });
@@ -363,16 +454,33 @@ class _MapScreenState extends State<MapScreen>
 
       final body = await utf8.decodeStream(response);
       final results = jsonDecode(body);
-      if (results is! List || results.isEmpty) return null;
+      if (results is! List || results.isEmpty) return const [];
 
-      final firstResult = results.first;
-      if (firstResult is! Map<String, dynamic>) return null;
+      final suggestions = <_MapLocationSuggestion>[];
+      for (final result in results) {
+        if (result is! Map<String, dynamic>) continue;
 
-      final latitude = double.tryParse(firstResult['lat']?.toString() ?? '');
-      final longitude = double.tryParse(firstResult['lon']?.toString() ?? '');
-      if (latitude == null || longitude == null) return null;
+        final latitude = double.tryParse(result['lat']?.toString() ?? '');
+        final longitude = double.tryParse(result['lon']?.toString() ?? '');
+        if (latitude == null || longitude == null) continue;
 
-      return LatLng(latitude, longitude);
+        final displayName = result['display_name']?.toString().trim() ?? '';
+        final name = result['name']?.toString().trim() ?? '';
+        final title = name.isNotEmpty
+            ? name
+            : displayName.split(',').first.trim();
+        if (title.isEmpty) continue;
+
+        suggestions.add(
+          _MapLocationSuggestion(
+            title: title,
+            subtitle: displayName.isEmpty ? query : displayName,
+            point: LatLng(latitude, longitude),
+          ),
+        );
+      }
+
+      return suggestions;
     } finally {
       client.close(force: true);
     }
@@ -399,11 +507,15 @@ class _MapScreenState extends State<MapScreen>
   }
 
   void _clearMapSearch() {
+    _searchSuggestionDebounce?.cancel();
+    _searchSuggestionRequestId++;
     _searchController.clear();
     _searchFocusNode.unfocus();
     setState(() {
       _searchedLocation = null;
       _searchedLocationLabel = null;
+      _locationSuggestions = const [];
+      _isLoadingLocationSuggestions = false;
     });
   }
 
@@ -712,6 +824,18 @@ class MapIssueCluster {
   }
 }
 
+class _MapLocationSuggestion {
+  const _MapLocationSuggestion({
+    required this.title,
+    required this.subtitle,
+    required this.point,
+  });
+
+  final String title;
+  final String subtitle;
+  final LatLng point;
+}
+
 class _VisibleCheckIn {
   const _VisibleCheckIn({
     required this.point,
@@ -873,14 +997,22 @@ class _MapSearchBar extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.isSearching,
+    required this.isLoadingSuggestions,
+    required this.suggestions,
+    required this.onChanged,
     required this.onSubmitted,
+    required this.onSuggestionTap,
     required this.onClear,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final bool isSearching;
+  final bool isLoadingSuggestions;
+  final List<_MapLocationSuggestion> suggestions;
+  final ValueChanged<String> onChanged;
   final ValueChanged<String> onSubmitted;
+  final ValueChanged<_MapLocationSuggestion> onSuggestionTap;
   final VoidCallback onClear;
 
   @override
@@ -890,59 +1022,195 @@ class _MapSearchBar extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       elevation: 5,
       shadowColor: const Color(0x26000000),
-      child: SizedBox(
-        height: 54,
-        child: ValueListenableBuilder<TextEditingValue>(
-          valueListenable: controller,
-          builder: (context, value, child) {
-            final hasText = value.text.trim().isNotEmpty;
+      clipBehavior: Clip.antiAlias,
+      child: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: controller,
+        builder: (context, value, child) {
+          final hasText = value.text.trim().isNotEmpty;
+          final showSuggestionPanel =
+              hasText && (isLoadingSuggestions || suggestions.isNotEmpty);
 
-            return TextField(
-              controller: controller,
-              focusNode: focusNode,
-              enabled: !isSearching,
-              textInputAction: TextInputAction.search,
-              onSubmitted: onSubmitted,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: kInk,
-                fontWeight: FontWeight.w700,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Cari lokasi di map',
-                hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: kMuted,
-                  fontWeight: FontWeight.w600,
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 54,
+                child: TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  enabled: !isSearching,
+                  textInputAction: TextInputAction.search,
+                  textAlignVertical: TextAlignVertical.center,
+                  onChanged: onChanged,
+                  onSubmitted: onSubmitted,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: kInk,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Cari lokasi di map',
+                    hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: kMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.only(left: 20, right: 14),
+                      child: Icon(
+                        Icons.search_rounded,
+                        color: kMuted,
+                        size: 24,
+                      ),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 58,
+                      minHeight: 54,
+                    ),
+                    suffixIcon: isSearching
+                        ? const Padding(
+                            padding: EdgeInsets.only(left: 14, right: 20),
+                            child: SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                              ),
+                            ),
+                          )
+                        : hasText
+                        ? IconButton(
+                            tooltip: 'Hapus pencarian',
+                            padding: const EdgeInsets.only(left: 14, right: 20),
+                            constraints: const BoxConstraints(
+                              minWidth: 58,
+                              minHeight: 54,
+                            ),
+                            onPressed: onClear,
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: kMuted,
+                              size: 22,
+                            ),
+                          )
+                        : null,
+                    suffixIconConstraints: const BoxConstraints(
+                      minWidth: 58,
+                      minHeight: 54,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.fromLTRB(0, 14, 14, 14),
+                  ),
                 ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  color: kMuted,
-                  size: 24,
-                ),
-                suffixIcon: isSearching
-                    ? const Padding(
-                        padding: EdgeInsets.all(15),
-                        child: SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2.4),
-                        ),
-                      )
-                    : hasText
-                    ? IconButton(
-                        tooltip: 'Hapus pencarian',
-                        onPressed: onClear,
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: kMuted,
-                          size: 22,
-                        ),
-                      )
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.fromLTRB(0, 16, 14, 15),
               ),
-            );
-          },
-        ),
+              if (showSuggestionPanel)
+                _MapSearchSuggestions(
+                  isLoading: isLoadingSuggestions,
+                  suggestions: suggestions,
+                  onTap: onSuggestionTap,
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _MapSearchSuggestions extends StatelessWidget {
+  const _MapSearchSuggestions({
+    required this.isLoading,
+    required this.suggestions,
+    required this.onTap,
+  });
+
+  final bool isLoading;
+  final List<_MapLocationSuggestion> suggestions;
+  final ValueChanged<_MapLocationSuggestion> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleSuggestions = suggestions.take(5).toList(growable: false);
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: kLine)),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 274),
+        child: isLoading && visibleSuggestions.isEmpty
+            ? const SizedBox(
+                height: 54,
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2.3),
+                  ),
+                ),
+              )
+            : ListView.separated(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: visibleSuggestions.length,
+                separatorBuilder: (context, index) =>
+                    const Divider(height: 1, color: kLine),
+                itemBuilder: (context, index) {
+                  final suggestion = visibleSuggestions[index];
+                  return InkWell(
+                    onTap: () => onTap(suggestion),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 11,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEFF6FF),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.place_rounded,
+                              color: Color(0xFF2563EB),
+                              size: 18,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  suggestion.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: kInk,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  suggestion.subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: kMuted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
