@@ -23,6 +23,7 @@ class SearchScreen extends StatefulWidget {
     this.onPostUpdated,
     this.onPostSaved,
     this.onPostLiked,
+    this.resetToken = 0,
   });
 
   final FeedPostRepository? feedPostRepository;
@@ -31,6 +32,7 @@ class SearchScreen extends StatefulWidget {
   final VoidCallback? onPostUpdated;
   final VoidCallback? onPostSaved;
   final VoidCallback? onPostLiked;
+  final int resetToken;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -70,6 +72,14 @@ class _SearchScreenState extends State<SearchScreen> {
     super.dispose();
   }
 
+  @override
+  void didUpdateWidget(covariant SearchScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.resetToken != oldWidget.resetToken) {
+      _resetToLanding();
+    }
+  }
+
   void _submitSearch(String value) {
     final query = value.trim();
     if (query.isEmpty) return;
@@ -89,6 +99,10 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _cancelSearch() {
+    _resetToLanding();
+  }
+
+  void _resetToLanding() {
     setState(() {
       _submittedQuery = '';
       _selectedTab = 'Semua';
@@ -107,7 +121,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return SafeArea(
       bottom: false,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
         children: [
           Text(
             'Search',
@@ -115,21 +129,21 @@ class _SearchScreenState extends State<SearchScreen> {
               context,
             ).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 26),
+          const SizedBox(height: 22),
           _SearchInput(
             controller: _controller,
             focusNode: _focusNode,
             hint: 'Search message, topic, or user',
             onSubmitted: _submitSearch,
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           Text(
             'Recent search',
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -155,7 +169,7 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Row(
               children: [
                 Expanded(
@@ -167,7 +181,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     onClear: () => setState(() => _controller.clear()),
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 TextButton(
                   onPressed: _cancelSearch,
                   child: const Text(
@@ -182,7 +196,7 @@ class _SearchScreenState extends State<SearchScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           _SearchTabs(
             tabs: _tabs,
             selectedTab: _selectedTab,
@@ -203,7 +217,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 final resultUsers = _rankUsers(posts, _submittedQuery);
 
                 return ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
                   children: [
                     if (_selectedTab == 'Semua' || _selectedTab == 'Postingan')
                       _ResultSection(
@@ -395,16 +409,16 @@ class _SearchInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 60,
+      height: 54,
       decoration: BoxDecoration(
         color: const Color(0xFFF0F1F3),
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(28),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: Color(0xFF4B5563), size: 28),
-          const SizedBox(width: 12),
+          const Icon(Icons.search_rounded, color: Color(0xFF4B5563), size: 24),
+          const SizedBox(width: 10),
           Expanded(
             child: TextField(
               controller: controller,
@@ -413,7 +427,7 @@ class _SearchInput extends StatelessWidget {
               onSubmitted: onSubmitted,
               style: const TextStyle(
                 color: kInk,
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
               decoration: InputDecoration(
@@ -422,7 +436,7 @@ class _SearchInput extends StatelessWidget {
                 hintText: hint,
                 hintStyle: const TextStyle(
                   color: kMuted,
-                  fontSize: 16,
+                  fontSize: 15,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -441,7 +455,7 @@ class _SearchInput extends StatelessWidget {
                 child: const Icon(
                   Icons.close_rounded,
                   color: Colors.white,
-                  size: 18,
+                  size: 17,
                 ),
               ),
             ),
@@ -466,17 +480,17 @@ class _RecentSearchPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.history_rounded, color: kCirculGreen, size: 17),
-              const SizedBox(width: 7),
+              const Icon(Icons.history_rounded, color: kCirculGreen, size: 16),
+              const SizedBox(width: 6),
               Text(
                 label,
                 style: const TextStyle(
                   color: kCirculGreen,
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -502,12 +516,12 @@ class _SearchTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 48,
+      height: 44,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: tabs.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 22),
+        separatorBuilder: (context, index) => const SizedBox(width: 18),
         itemBuilder: (context, index) {
           final tab = tabs[index];
           final selected = tab == selectedTab;
@@ -520,13 +534,13 @@ class _SearchTabs extends StatelessWidget {
                   tab,
                   style: TextStyle(
                     color: selected ? kCirculGreen : kMuted,
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Container(
-                  width: 76,
+                  width: 68,
                   height: 3,
                   color: selected ? kCirculGreen : Colors.transparent,
                 ),

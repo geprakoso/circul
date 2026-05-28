@@ -323,6 +323,35 @@ void main() {
     expect(find.text('Topik'), findsNothing);
   });
 
+  testWidgets('tapping selected search nav returns to search landing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      CirculApp(feedPostRepository: _FakeFeedPostRepository()),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Cari'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search message, topic, or user'),
+      'sampa plastik',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Postingan'), findsWidgets);
+    expect(find.text('Batal'), findsOneWidget);
+    expect(find.text('Recent search'), findsNothing);
+
+    await tester.tap(find.text('Cari'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recent search'), findsOneWidget);
+    expect(find.text('sampa plastik'), findsOneWidget);
+    expect(find.text('Batal'), findsNothing);
+  });
+
   testWidgets('profile postingan tab renders all posts by Sarah', (
     tester,
   ) async {

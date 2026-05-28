@@ -78,6 +78,7 @@ class _CirculShellState extends State<CirculShell> {
   var _homeRefreshToken = 0;
   var _profileRefreshToken = 0;
   var _mapCurrentLocationRefreshToken = 0;
+  var _searchResetToken = 0;
   MapFocusedCheckIn? _focusedCheckIn;
   final _issueClusters = <MapIssueCluster>[];
 
@@ -164,6 +165,9 @@ class _CirculShellState extends State<CirculShell> {
 
   void _handleTabChanged(int index) {
     setState(() {
+      if (index == 2 && _index == 2) {
+        _searchResetToken++;
+      }
       _index = index;
       if (index == 1) {
         _focusedCheckIn = null;
@@ -205,6 +209,7 @@ class _CirculShellState extends State<CirculShell> {
         onPostUpdated: _refreshPostConsumers,
         onPostSaved: _refreshPostConsumers,
         onPostLiked: _refreshPostConsumers,
+        resetToken: _searchResetToken,
       ),
       const EventScreen(),
       ProfileScreen(
