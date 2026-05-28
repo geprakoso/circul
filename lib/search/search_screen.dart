@@ -36,7 +36,7 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  static const _tabs = ['Semua', 'Postingan', 'Pengguna', 'Topik'];
+  static const _tabs = ['Semua', 'Postingan', 'Pengguna'];
 
   late final FeedPostRepository _repository;
   late Future<List<FeedPost>> _postsFuture;
@@ -196,7 +196,6 @@ class _SearchScreenState extends State<SearchScreen> {
 
                 final resultPosts = _rankPosts(posts, _submittedQuery);
                 final resultUsers = _rankUsers(posts, _submittedQuery);
-                final resultTopics = _rankTopics(_submittedQuery);
 
                 return ListView(
                   padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
@@ -214,18 +213,6 @@ class _SearchScreenState extends State<SearchScreen> {
                         children: [
                           for (final user in resultUsers.take(3))
                             _UserResultTile(user: user),
-                        ],
-                      ),
-                    if (_selectedTab == 'Semua' || _selectedTab == 'Topik')
-                      _ResultSection(
-                        title: 'Topik',
-                        showSeeAll: true,
-                        children: [
-                          for (final topic in resultTopics.take(3))
-                            _TopicResultTile(
-                              topic: topic,
-                              onTap: () => _openTopicResults(topic),
-                            ),
                         ],
                       ),
                   ],
@@ -289,18 +276,6 @@ class _SearchScreenState extends State<SearchScreen> {
     widget.onPostUpdated?.call();
   }
 
-  void _openTopicResults(Topic topic) {
-    final query = topic.title.startsWith('#')
-        ? topic.title.substring(1)
-        : topic.title;
-    _controller.text = query;
-    setState(() {
-      _submittedQuery = query;
-      _selectedTab = 'Semua';
-    });
-    _focusNode.unfocus();
-  }
-
   List<_SearchUser> _rankUsers(List<FeedPost> posts, String query) {
     final normalizedQuery = _normalize(query);
     final users = _usersFromPosts(posts);
@@ -326,23 +301,6 @@ class _SearchScreenState extends State<SearchScreen> {
 
     users.sort((first, second) => second.postCount.compareTo(first.postCount));
     return users;
-  }
-
-  List<Topic> _rankTopics(String query) {
-    final normalizedQuery = _normalize(query).replaceAll('#', '');
-    final matches = topics.where((topic) {
-      return _normalize(topic.title).contains(normalizedQuery) ||
-          _normalize(topic.icon).contains(normalizedQuery);
-    }).toList();
-    final hashtagTopic = Topic(
-      '#',
-      '#${normalizedQuery.replaceAll(' ', '')}',
-      '12.5K postingan',
-    );
-    return [
-      hashtagTopic,
-      ...matches.where((topic) => topic.title != hashtagTopic.title),
-    ];
   }
 
   String _normalize(String value) => value.toLowerCase().trim();
@@ -843,68 +801,6 @@ class _UserResultTile extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _TopicResultTile extends StatelessWidget {
-  const _TopicResultTile({required this.topic, required this.onTap});
-
-  final Topic topic;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: Row(
-          children: [
-            Container(
-              width: 54,
-              height: 54,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEFF8F2),
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                topic.icon,
-                style: const TextStyle(
-                  color: kCirculGreen,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  topic.title,
-                  style: const TextStyle(
-                    color: kInk,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  topic.count,
-                  style: const TextStyle(
-                    color: kMuted,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
