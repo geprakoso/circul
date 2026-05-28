@@ -12,7 +12,6 @@ import '../saved_post_repository.dart';
 import '../shared/animated_like_icon.dart';
 import '../shared/relative_timestamp.dart';
 import '../shared/sarah_avatar.dart';
-import 'widgets/topic_row.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({
@@ -43,7 +42,12 @@ class _SearchScreenState extends State<SearchScreen> {
   late Future<List<FeedPost>> _postsFuture;
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
-  var _selectedTrend = '#sampahplastik';
+  var _recentSearches = <String>[
+    'sampah plastik',
+    'zero waste',
+    'daur ulang',
+    'komunitas lokal',
+  ];
   var _selectedTab = 'Semua';
   var _submittedQuery = '';
 
@@ -67,8 +71,16 @@ class _SearchScreenState extends State<SearchScreen> {
     setState(() {
       _submittedQuery = query;
       _selectedTab = 'Semua';
+      _rememberRecentSearch(query);
     });
     _focusNode.unfocus();
+  }
+
+  void _rememberRecentSearch(String query) {
+    _recentSearches = [
+      query,
+      ..._recentSearches.where((item) => _normalize(item) != _normalize(query)),
+    ].take(8).toList(growable: false);
   }
 
   void _cancelSearch() {
@@ -107,57 +119,26 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           const SizedBox(height: 28),
           Text(
-            'Trending',
+            'Recent search',
             style: Theme.of(
               context,
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 16),
           Wrap(
-            spacing: 14,
-            runSpacing: 12,
+            spacing: 10,
+            runSpacing: 10,
             children: [
-              for (final trend in ['#sampahplastik', '#zerowaste'])
-                ChoiceChip(
-                  selected: _selectedTrend == trend,
-                  onSelected: (_) {
-                    setState(() => _selectedTrend = trend);
-                    _controller.text = trend.replaceFirst('#', '');
-                    _submitSearch(_controller.text);
+              for (final query in _recentSearches)
+                _RecentSearchPill(
+                  label: query,
+                  onTap: () {
+                    _controller.text = query;
+                    _submitSearch(query);
                   },
-                  avatar: Icon(
-                    Icons.trending_up_rounded,
-                    color: kCirculGreen,
-                    size: 19,
-                  ),
-                  label: Text(trend),
-                  labelStyle: const TextStyle(
-                    color: kCirculGreen,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  selectedColor: kSoftGreen,
-                  backgroundColor: const Color(0xFFF1F4F2),
-                  side: BorderSide.none,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(26),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 13,
-                    vertical: 13,
-                  ),
                 ),
             ],
           ),
-          const SizedBox(height: 26),
-          Text(
-            'Topik populer',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 12),
-          for (final topic in topics)
-            TopicRow(topic: topic, onTap: () => _openTopicResults(topic)),
         ],
       ),
     );
@@ -436,6 +417,43 @@ class _SearchInput extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _RecentSearchPill extends StatelessWidget {
+  const _RecentSearchPill({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF1F4F2),
+      borderRadius: BorderRadius.circular(999),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.history_rounded, color: kCirculGreen, size: 17),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: kCirculGreen,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

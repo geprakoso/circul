@@ -52,8 +52,11 @@ void main() {
     await tester.tap(find.text('Cari'));
     await tester.pumpAndSettle();
     expect(find.text('Search'), findsOneWidget);
-    expect(find.text('#sampahplastik'), findsOneWidget);
-    expect(find.text('Gaya Hidup Berkelanjutan'), findsOneWidget);
+    expect(find.text('Recent search'), findsOneWidget);
+    expect(find.text('sampah plastik'), findsOneWidget);
+    expect(find.text('zero waste'), findsOneWidget);
+    expect(find.text('Topik populer'), findsNothing);
+    expect(find.text('Trending'), findsNothing);
 
     await tester.tap(find.text('Profil'));
     await tester.pumpAndSettle();
