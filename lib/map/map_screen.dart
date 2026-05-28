@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -59,6 +60,7 @@ class _MapScreenState extends State<MapScreen>
   static const _visibleBoundsRefreshDelay = Duration(milliseconds: 280);
   static const _searchSuggestionDelay = Duration(milliseconds: 420);
   static const _initialCheckInSheetSize = .22;
+  static const _feedCheckInClusterMaxZoom = 17.0;
 
   final _mapController = MapController();
   final _checkInSheetController = DraggableScrollableController();
@@ -84,6 +86,7 @@ class _MapScreenState extends State<MapScreen>
   Timer? _searchSuggestionDebounce;
   LatLngBounds? _visibleBounds;
   double _checkInSheetSize = _initialCheckInSheetSize;
+  double _currentMapZoom = 16;
   int _searchSuggestionRequestId = 0;
 
   @override
@@ -147,6 +150,7 @@ class _MapScreenState extends State<MapScreen>
 
   @override
   Widget build(BuildContext context) {
+    final feedCheckInMarkerGroups = _feedCheckInMarkerGroups();
     final visibleCheckIns = _visibleCheckIns();
     final visiblePostRecords = visibleCheckIns
         .where((item) => item.isPostRecord)
@@ -195,21 +199,40 @@ class _MapScreenState extends State<MapScreen>
                     alignment: Alignment.topCenter,
                     child: _ActivityMarker(activity: activity),
                   ),
-                for (final post in _feedCheckIns)
-                  if (post.locationPoint case final point?)
-                    Marker(
-                      point: point,
-                      width: 46,
-                      height: 46,
-                      alignment: Alignment.topCenter,
-                      child: const _FeedPostCheckInMarker(),
-                    ),
-                for (final cluster in widget.issueClusters)
+                for (final group in feedCheckInMarkerGroups)
                   Marker(
-                    point: cluster.point,
-                    width: _clusterMarkerSizeForCount(cluster.count) + 8,
-                    height: _clusterMarkerSizeForCount(cluster.count) + 8,
-                    child: _IssueQuantityMarker(cluster: cluster),
+                    point: group.point,
+                    width: 58,
+                    height: 64,
+                    alignment: Alignment.topCenter,
+                    child: _TappableMapMarker(
+                      onTap: () => _openFeedPostCheckInMarkerGroup(group),
+                      child: group.isCluster
+                          ? _FeedPostCheckInClusterMarker(
+                              count: group.posts.length,
+                            )
+                          : _FeedPostCheckInMarker(post: group.posts.single),
+                    ),
+                  ),
+                for (var i = 0; i < widget.issueClusters.length; i++)
+                  Marker(
+                    point: widget.issueClusters[i].point,
+                    width:
+                        _clusterMarkerSizeForCount(
+                          widget.issueClusters[i].count,
+                        ) +
+                        8,
+                    height:
+                        _clusterMarkerSizeForCount(
+                          widget.issueClusters[i].count,
+                        ) +
+                        8,
+                    child: _TappableMapMarker(
+                      onTap: () => _openIssueClusterDetail(i),
+                      child: _IssueQuantityMarker(
+                        cluster: widget.issueClusters[i],
+                      ),
+                    ),
                   ),
                 if (widget.focusedCheckIn case final focusedCheckIn?)
                   Marker(
@@ -217,7 +240,10 @@ class _MapScreenState extends State<MapScreen>
                     width: 58,
                     height: 58,
                     alignment: Alignment.topCenter,
-                    child: const _FocusedCheckInMarker(),
+                    child: _TappableMapMarker(
+                      onTap: () => _openFocusedCheckInDetail(focusedCheckIn),
+                      child: const _FocusedCheckInMarker(),
+                    ),
                   ),
                 if (_searchedLocation case final searchedLocation?)
                   Marker(
@@ -558,6 +584,53 @@ class _MapScreenState extends State<MapScreen>
     _animateMapTo(item.point, 17, screenOffset: _detailSheetCameraOffset());
   }
 
+  void _openFocusedCheckInDetail(MapFocusedCheckIn focusedCheckIn) {
+    _openCheckInDetail(
+      _VisibleCheckIn.fromFocusedCheckIn(
+        focusedCheckIn: focusedCheckIn,
+        currentLocation: _checkInDistanceAnchor,
+      ),
+    );
+  }
+
+  void _openFeedPostCheckInDetail(FeedPost post) {
+    final point = post.locationPoint;
+    if (point == null) return;
+
+    _openCheckInDetail(
+      _VisibleCheckIn.fromFeedPost(
+        post: post,
+        point: point,
+        currentLocation: _checkInDistanceAnchor,
+      ),
+    );
+  }
+
+  void _openFeedPostCheckInMarkerGroup(_FeedPostCheckInMarkerGroup group) {
+    if (!group.isCluster) {
+      _openFeedPostCheckInDetail(group.posts.single);
+      return;
+    }
+
+    setState(() => _selectedCheckIn = null);
+    final targetZoom = math
+        .min(_feedCheckInClusterMaxZoom, math.max(15, _currentMapZoom + 2))
+        .toDouble();
+    _animateMapTo(group.point, targetZoom);
+  }
+
+  void _openIssueClusterDetail(int index) {
+    if (index < 0 || index >= widget.issueClusters.length) return;
+
+    _openCheckInDetail(
+      _VisibleCheckIn.fromCluster(
+        cluster: widget.issueClusters[index],
+        index: index,
+        currentLocation: _checkInDistanceAnchor,
+      ),
+    );
+  }
+
   Future<void> _openCheckoutCamera(_VisibleCheckIn item) async {
     final post = item.post;
     if (post == null) return;
@@ -606,21 +679,77 @@ class _MapScreenState extends State<MapScreen>
     _visibleBoundsRefreshTimer?.cancel();
     final nextBounds =
         camera?.visibleBounds ?? _mapController.camera.visibleBounds;
+    final nextZoom = camera?.zoom ?? _mapController.camera.zoom;
     if (!mounted) return;
-    setState(() => _visibleBounds = nextBounds);
+    setState(() {
+      _visibleBounds = nextBounds;
+      _currentMapZoom = nextZoom;
+    });
   }
 
   void _scheduleVisibleBoundsSync(MapCamera camera, bool hasGesture) {
     _visibleBoundsRefreshTimer?.cancel();
+    if ((_currentMapZoom - camera.zoom).abs() > .01) {
+      setState(() => _currentMapZoom = camera.zoom);
+    }
     _visibleBoundsRefreshTimer = Timer(_visibleBoundsRefreshDelay, () {
       _syncVisibleBounds(camera);
     });
   }
 
+  List<_FeedPostCheckInMarkerGroup> _feedCheckInMarkerGroups() {
+    final entries = <_FeedPostCheckInMarkerEntry>[
+      for (final post in _feedCheckIns)
+        if (post.locationPoint case final point?)
+          _FeedPostCheckInMarkerEntry(post: post, point: point),
+    ];
+
+    if (_currentMapZoom >= _feedCheckInClusterMaxZoom || entries.length < 2) {
+      return [
+        for (final entry in entries)
+          _FeedPostCheckInMarkerGroup(point: entry.point, posts: [entry.post]),
+      ];
+    }
+
+    final radiusMeters = _feedCheckInClusterRadiusMeters(_currentMapZoom);
+    final groups = <_MutableFeedPostCheckInMarkerGroup>[];
+    for (final entry in entries) {
+      _MutableFeedPostCheckInMarkerGroup? nearestGroup;
+      var nearestDistance = double.infinity;
+
+      for (final group in groups) {
+        final distance = MapScreen.distanceMeters(group.point, entry.point);
+        if (distance <= radiusMeters && distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestGroup = group;
+        }
+      }
+
+      if (nearestGroup == null) {
+        groups.add(_MutableFeedPostCheckInMarkerGroup(entry));
+      } else {
+        nearestGroup.add(entry);
+      }
+    }
+
+    return [
+      for (final group in groups)
+        _FeedPostCheckInMarkerGroup(
+          point: group.point,
+          posts: List.unmodifiable(group.posts),
+        ),
+    ];
+  }
+
+  double _feedCheckInClusterRadiusMeters(double zoom) {
+    final zoomSteps = (16 - zoom).clamp(0, 4).toDouble();
+    return 90 * math.pow(2, zoomSteps).toDouble();
+  }
+
   List<_VisibleCheckIn> _visibleCheckIns() {
     final bounds = _visibleBounds;
     final focusedCheckIn = widget.focusedCheckIn;
-    final distanceAnchor = focusedCheckIn?.point ?? _currentLocation;
+    final distanceAnchor = _checkInDistanceAnchor;
     final items = <_VisibleCheckIn>[
       if (focusedCheckIn != null)
         _VisibleCheckIn.fromFocusedCheckIn(
@@ -659,6 +788,9 @@ class _MapScreenState extends State<MapScreen>
     );
     return visibleItems;
   }
+
+  LatLng get _checkInDistanceAnchor =>
+      widget.focusedCheckIn?.point ?? _currentLocation;
 
   Future<void> _centerToCurrentLocation({
     bool preferLastKnown = false,
@@ -905,6 +1037,40 @@ class _MapLocationSuggestion {
   final String title;
   final String subtitle;
   final LatLng point;
+}
+
+class _FeedPostCheckInMarkerEntry {
+  const _FeedPostCheckInMarkerEntry({required this.post, required this.point});
+
+  final FeedPost post;
+  final LatLng point;
+}
+
+class _FeedPostCheckInMarkerGroup {
+  const _FeedPostCheckInMarkerGroup({required this.point, required this.posts});
+
+  final LatLng point;
+  final List<FeedPost> posts;
+
+  bool get isCluster => posts.length > 1;
+}
+
+class _MutableFeedPostCheckInMarkerGroup {
+  _MutableFeedPostCheckInMarkerGroup(_FeedPostCheckInMarkerEntry entry)
+    : point = entry.point,
+      posts = [entry.post];
+
+  LatLng point;
+  final List<FeedPost> posts;
+
+  void add(_FeedPostCheckInMarkerEntry entry) {
+    final nextCount = posts.length + 1;
+    point = LatLng(
+      ((point.latitude * posts.length) + entry.point.latitude) / nextCount,
+      ((point.longitude * posts.length) + entry.point.longitude) / nextCount,
+    );
+    posts.add(entry.post);
+  }
 }
 
 class _VisibleCheckIn {
@@ -2165,6 +2331,28 @@ class _CurrentLocationMarker extends StatelessWidget {
   }
 }
 
+class _TappableMapMarker extends StatelessWidget {
+  const _TappableMapMarker({required this.child, required this.onTap});
+
+  final Widget child;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class _FocusedCheckInMarker extends StatelessWidget {
   const _FocusedCheckInMarker();
 
@@ -2263,26 +2451,219 @@ class _SearchResultMarker extends StatelessWidget {
 }
 
 class _FeedPostCheckInMarker extends StatelessWidget {
-  const _FeedPostCheckInMarker();
+  const _FeedPostCheckInMarker({required this.post});
+
+  final FeedPost post;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        color: kCirculGreen,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 3),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26000000),
-            blurRadius: 7,
-            offset: Offset(0, 3),
+    final imagePath = post.imagePaths.isEmpty ? null : post.imagePaths.first;
+    final imageAsset = post.imageAsset.trim().isEmpty
+        ? null
+        : post.imageAsset.trim();
+    final hasImage = imagePath != null || imageAsset != null;
+
+    return Semantics(
+      label: hasImage
+          ? 'Check-in dengan foto ${post.locationLabel ?? post.city}'
+          : 'Check-in ${post.locationLabel ?? post.city}',
+      child: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          Positioned(
+            top: 44,
+            child: Transform.rotate(
+              angle: .785398,
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: hasImage ? Colors.white : kCirculGreen,
+                  border: Border.all(
+                    color: hasImage ? Colors.white : kCirculGreen,
+                    width: 2,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x22000000),
+                      blurRadius: 5,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: hasImage ? Colors.white : kCirculGreen,
+                    shape: BoxShape.circle,
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x26000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.all(3),
+                    child: ClipOval(
+                      child: hasImage
+                          ? _CheckInMarkerThumbnail(
+                              imagePath: imagePath,
+                              imageAsset: imageAsset,
+                            )
+                          : const ColoredBox(
+                              color: kCirculGreen,
+                              child: Icon(
+                                Icons.flag_rounded,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      child: const Icon(Icons.flag_rounded, color: Colors.white, size: 18),
+    );
+  }
+}
+
+class _FeedPostCheckInClusterMarker extends StatelessWidget {
+  const _FeedPostCheckInClusterMarker({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$count check-in di area ini',
+      child: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          Positioned(
+            top: 44,
+            child: Transform.rotate(
+              angle: .785398,
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: kCirculGreen,
+                  border: Border.all(color: kCirculGreen, width: 2),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x22000000),
+                      blurRadius: 5,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: kCirculGreen,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x26000000),
+                        blurRadius: 8,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                ),
+                Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 9),
+                      child: Text(
+                        count.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckInMarkerThumbnail extends StatelessWidget {
+  const _CheckInMarkerThumbnail({this.imagePath, this.imageAsset});
+
+  final String? imagePath;
+  final String? imageAsset;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = imagePath;
+    if (path != null) {
+      return Image.file(
+        File(path),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _thumbnailFallback(),
+      );
+    }
+
+    final asset = imageAsset;
+    if (asset != null) {
+      return Image.asset(
+        asset,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _thumbnailFallback(),
+      );
+    }
+
+    return _thumbnailFallback();
+  }
+
+  Widget _thumbnailFallback() {
+    return const ColoredBox(
+      color: kCirculGreen,
+      child: Icon(Icons.flag_rounded, color: Colors.white, size: 22),
     );
   }
 }

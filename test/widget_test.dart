@@ -3,6 +3,7 @@ import 'package:circul/feed_post_repository.dart';
 import 'package:circul/home/widgets/feed_post_card.dart';
 import 'package:circul/liked_post_repository.dart';
 import 'package:circul/main.dart';
+import 'package:circul/map/map_screen.dart';
 import 'package:circul/mock_data.dart';
 import 'package:circul/profile/profile_screen.dart';
 import 'package:circul/saved_post_repository.dart';
@@ -98,6 +99,105 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Event'), findsWidgets);
     expect(find.text('Aksi Bersih Sungai Pepe'), findsWidgets);
+  });
+
+  testWidgets('map check-in marker opens detail when tapped', (tester) async {
+    final post = FeedPost(
+      id: 'check_in_1',
+      author: 'sarahmae',
+      city: 'Solo',
+      timeAgo: 'Baru saja',
+      title: 'Check-in Lingkungan',
+      body: 'Butuh dicek lagi.',
+      imageAsset: '',
+      locationEnabled: true,
+      locationLabel: 'Warung Hijau',
+      locationLatitude: -7.5584,
+      locationLongitude: 110.8199,
+      likes: 0,
+      comments: 0,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MapScreen(
+            feedPostRepository: _FakeFeedPostRepository(posts: [post]),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detail check-in'), findsNothing);
+
+    await tester.tap(find.bySemanticsLabel('Check-in Warung Hijau'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detail check-in'), findsOneWidget);
+    expect(find.text('Warung Hijau'), findsWidgets);
+    expect(find.text('Butuh dicek lagi.'), findsWidgets);
+  });
+
+  testWidgets('map groups nearby check-ins into count marker when zoomed out', (
+    tester,
+  ) async {
+    final posts = [
+      const FeedPost(
+        id: 'check_in_1',
+        author: 'sarahmae',
+        city: 'Solo',
+        timeAgo: 'Baru saja',
+        title: 'Check-in Lingkungan',
+        body: 'Titik pertama.',
+        imageAsset: '',
+        locationEnabled: true,
+        locationLabel: 'Warung Hijau',
+        locationLatitude: -7.5584,
+        locationLongitude: 110.8199,
+        likes: 0,
+        comments: 0,
+      ),
+      const FeedPost(
+        id: 'check_in_2',
+        author: 'sarahmae',
+        city: 'Solo',
+        timeAgo: 'Baru saja',
+        title: 'Check-in Lingkungan',
+        body: 'Titik kedua.',
+        imageAsset: '',
+        locationEnabled: true,
+        locationLabel: 'Taman Dekat',
+        locationLatitude: -7.55845,
+        locationLongitude: 110.81995,
+        likes: 0,
+        comments: 0,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MapScreen(
+            feedPostRepository: _FakeFeedPostRepository(posts: posts),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Text &&
+            widget.data == '2' &&
+            widget.style?.fontSize == 18 &&
+            widget.style?.fontWeight == FontWeight.w900,
+      ),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('Check-in Warung Hijau'), findsNothing);
+    expect(find.bySemanticsLabel('Check-in Taman Dekat'), findsNothing);
   });
 
   testWidgets('profile postingan tab renders all posts by Sarah', (
