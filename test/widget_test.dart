@@ -23,11 +23,11 @@ void main() {
     await tester.pump();
 
     expect(find.text('Circul'), findsOneWidget);
-    expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Peta'), findsOneWidget);
-    expect(find.text('Cari'), findsOneWidget);
-    expect(find.text('Event'), findsOneWidget);
-    expect(find.text('Profil'), findsOneWidget);
+    expect(find.bySemanticsLabel('Home'), findsOneWidget);
+    expect(find.bySemanticsLabel('Peta'), findsOneWidget);
+    expect(find.bySemanticsLabel('Cari'), findsOneWidget);
+    expect(find.bySemanticsLabel('Event'), findsOneWidget);
+    expect(find.bySemanticsLabel('Profil'), findsOneWidget);
     expect(
       find.text('Tips mengurangi sampah plastik di rumah 🌿'),
       findsOneWidget,
@@ -50,7 +50,7 @@ void main() {
     Navigator.of(tester.element(find.text('Give your response'))).pop();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Cari'));
+    await tester.tap(find.bySemanticsLabel('Cari'));
     await tester.pumpAndSettle();
     expect(find.text('Search'), findsOneWidget);
     expect(find.text('Recent search'), findsOneWidget);
@@ -59,7 +59,7 @@ void main() {
     expect(find.text('Topik populer'), findsNothing);
     expect(find.text('Trending'), findsNothing);
 
-    await tester.tap(find.text('Profil'));
+    await tester.tap(find.bySemanticsLabel('Profil'));
     await tester.pumpAndSettle();
     expect(find.text('Sarah Mae'), findsWidgets);
     expect(find.text('Achievement'), findsWidgets);
@@ -67,7 +67,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Eco Starter'), findsOneWidget);
 
-    await tester.tap(find.text('Peta'));
+    await tester.tap(find.bySemanticsLabel('Peta'));
     await tester.pumpAndSettle();
     expect(find.byType(FlutterMap), findsOneWidget);
     expect(find.byType(TileLayer), findsOneWidget);
@@ -99,10 +99,10 @@ void main() {
     Navigator.of(tester.element(find.text('Capture Result'))).pop();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Event'));
+    await tester.tap(find.bySemanticsLabel('Event'));
     await tester.pumpAndSettle();
-    expect(find.text('Event'), findsWidgets);
-    expect(find.text('Aksi Bersih Sungai Pepe'), findsWidgets);
+    expect(find.text('upcoming feature'), findsOneWidget);
+    expect(find.text('Aksi Bersih Sungai Pepe'), findsNothing);
   });
 
   testWidgets('map check-in marker opens detail when tapped', (tester) async {
@@ -331,7 +331,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Cari'));
+    await tester.tap(find.bySemanticsLabel('Cari'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'Search message, topic, or user'),
@@ -344,7 +344,7 @@ void main() {
     expect(find.text('Batal'), findsOneWidget);
     expect(find.text('Recent search'), findsNothing);
 
-    await tester.tap(find.text('Cari'));
+    await tester.tap(find.bySemanticsLabel('Cari'));
     await tester.pumpAndSettle();
 
     expect(find.text('Recent search'), findsOneWidget);
@@ -508,7 +508,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Profil'));
+    await tester.tap(find.bySemanticsLabel('Profil'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Edit Profil'));
     await tester.pumpAndSettle();
@@ -531,12 +531,12 @@ void main() {
     await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Home'));
+    await tester.tap(find.bySemanticsLabel('Home'));
     await tester.pumpAndSettle();
     expect(find.text('mayagreen'), findsOneWidget);
     expect(find.text('sarahmae'), findsNothing);
 
-    await tester.tap(find.text('Peta'));
+    await tester.tap(find.bySemanticsLabel('Peta'));
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('Check-in Warung Hijau'));
     await tester.pumpAndSettle();

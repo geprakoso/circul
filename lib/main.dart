@@ -294,8 +294,8 @@ class CirculBottomNav extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        height: 88,
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+        height: 72,
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
         decoration: const BoxDecoration(
           color: Colors.white,
           border: Border(top: BorderSide(color: kLine)),
@@ -341,27 +341,14 @@ class _BottomNavButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (item.label == 'Profil')
-              _NavProfileAvatar(profile: currentUserProfile)
-            else
-              Icon(
-                selected ? item.activeIcon : item.icon,
-                color: color,
-                size: 31,
-              ),
-            const SizedBox(height: 5),
-            Text(
-              item.label,
-              style: TextStyle(
-                color: color,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-          ],
+        child: Center(
+          child: item.label == 'Profil'
+              ? _NavProfileAvatar(profile: currentUserProfile)
+              : Icon(
+                  selected ? item.activeIcon : item.icon,
+                  color: color,
+                  size: 31,
+                ),
         ),
       ),
     );
