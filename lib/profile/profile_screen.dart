@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../comment_repository.dart';
@@ -6,6 +8,7 @@ import '../feed_post_repository.dart';
 import '../home/widgets/feed_post_card.dart';
 import '../liked_post_repository.dart';
 import '../mock_data.dart';
+import 'edit_profile_screen.dart';
 import '../saved_post_repository.dart';
 import '../shared/shared_widgets.dart';
 import 'widgets/achievement_badge.dart';
@@ -39,6 +42,13 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   static const _profileAuthor = 'sarahmae';
 
+  var _profile = const EditableProfile(
+    name: 'Sarah Mae',
+    username: _profileAuthor,
+    bio:
+        'Berusaha hidup lebih berkelanjutan 🌿\nBelajar, berbagi, dan berdampak.',
+    location: 'Jakarta, Indonesia',
+  );
   var _selectedTab = 'Postingan';
   late final FeedPostRepository _repository;
   late final CommentRepository _commentRepository;
@@ -130,6 +140,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     widget.onPostUpdated?.call();
   }
 
+  Future<void> _openEditProfile() async {
+    final posts = await _postsFuture.catchError((_) => const <FeedPost>[]);
+    if (!mounted) return;
+
+    final takenUsernames = {
+      for (final post in posts)
+        if (post.author.toLowerCase() != _profile.username.toLowerCase())
+          post.author,
+    };
+
+    final updatedProfile = await Navigator.of(context).push<EditableProfile>(
+      MaterialPageRoute<EditableProfile>(
+        builder: (context) => EditProfileScreen(
+          profile: _profile,
+          takenUsernames: takenUsernames,
+        ),
+      ),
+    );
+    if (!mounted || updatedProfile == null) return;
+
+    setState(() => _profile = updatedProfile);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Profil diperbarui.')));
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -143,14 +179,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SarahAvatar(radius: 56),
+                _ProfileAvatar(profile: _profile, radius: 56),
                 const SizedBox(width: 18),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Sarah Mae',
+                        _profile.name,
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
                               fontSize: 22,
@@ -158,29 +194,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                       ),
                       const SizedBox(height: 3),
-                      const Text(
-                        '@sarahmae',
-                        style: TextStyle(
+                      Text(
+                        '@${_profile.username}',
+                        style: const TextStyle(
                           color: kMuted,
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const Text(
-                        'Berusaha hidup lebih berkelanjutan 🌿\nBelajar, berbagi, dan berdampak.',
-                        style: TextStyle(fontSize: 15, height: 1.35),
+                      Text(
+                        _profile.bio,
+                        style: const TextStyle(fontSize: 15, height: 1.35),
                       ),
                       const SizedBox(height: 16),
-                      const Wrap(
+                      Wrap(
                         spacing: 14,
                         runSpacing: 8,
                         children: [
                           ProfileMeta(
                             icon: Icons.location_on_outlined,
-                            text: 'Jakarta, Indonesia',
+                            text: _profile.location,
                           ),
-                          ProfileMeta(
+                          const ProfileMeta(
                             icon: Icons.calendar_today_outlined,
                             text: 'Bergabung Mei 2023',
                           ),
@@ -188,7 +224,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 16),
                       OutlinedButton.icon(
-                        onPressed: () {},
+                        onPressed: _openEditProfile,
                         icon: const Icon(Icons.edit_square),
                         label: const Text('Edit Profil'),
                         style: OutlinedButton.styleFrom(
@@ -260,6 +296,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
           else
             ProfilePlaceholder(tab: _selectedTab),
         ],
+      ),
+    );
+  }
+}
+
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({required this.profile, required this.radius});
+
+  final EditableProfile profile;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePath = profile.imagePath;
+    if (imagePath == null || imagePath.trim().isEmpty) {
+      return SarahAvatar(radius: radius);
+    }
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: const Color(0xFFE5E7EB),
+      child: ClipOval(
+        child: Image.file(
+          File(imagePath),
+          width: radius * 2,
+          height: radius * 2,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Image.asset(
+            avatarAsset,
+            width: radius * 2,
+            height: radius * 2,
+            fit: BoxFit.cover,
+          ),
+        ),
       ),
     );
   }

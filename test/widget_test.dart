@@ -410,6 +410,79 @@ void main() {
     expect(find.text('Postingan orang lain'), findsNothing);
   });
 
+  testWidgets('profile edit screen validates username and updates profile', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ProfileScreen(
+            feedPostRepository: _FakeFeedPostRepository(
+              posts: [
+                ...feedPosts,
+                const FeedPost(
+                  author: 'ecofriend',
+                  city: 'Solo',
+                  timeAgo: '1 jam',
+                  title: 'Postingan teman',
+                  body: 'Username ini sudah dipakai.',
+                  imageAsset: cleanupAsset,
+                  likes: 2,
+                  comments: 1,
+                ),
+              ],
+            ),
+            commentRepository: _FakeCommentRepository(),
+            savedPostRepository: _FakeSavedPostRepository(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Edit Profil'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Username'), findsOneWidget);
+    expect(find.text('Bio'), findsOneWidget);
+    expect(find.text('City, Country'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Username'),
+      'ecofriend',
+    );
+    await tester.tap(find.text('Simpan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Username sudah dipakai.'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Name'),
+      'Maya Green',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Username'),
+      'mayagreen',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Bio'),
+      'Belajar hidup minim sampah.',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'City, Country'),
+      'Solo, Indonesia',
+    );
+    await tester.tap(find.text('Simpan'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Maya Green'), findsOneWidget);
+    expect(find.text('@mayagreen'), findsOneWidget);
+    expect(find.text('Belajar hidup minim sampah.'), findsOneWidget);
+    expect(find.text('Solo, Indonesia'), findsOneWidget);
+    expect(find.text('Profil diperbarui.'), findsOneWidget);
+  });
+
   testWidgets('profile komentar tab renders user comment with source post', (
     tester,
   ) async {
