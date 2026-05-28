@@ -9,6 +9,7 @@ import '../home/widgets/post_options_bottom_sheet.dart';
 import '../image_viewer/uploaded_image_fullscreen_page.dart';
 import '../liked_post_repository.dart';
 import '../mock_data.dart';
+import '../profile/edit_profile_screen.dart';
 import '../saved_post_repository.dart';
 import '../shared/animated_like_icon.dart';
 import '../shared/relative_timestamp.dart';
@@ -24,6 +25,8 @@ class SearchScreen extends StatefulWidget {
     this.onPostSaved,
     this.onPostLiked,
     this.resetToken = 0,
+    this.currentUserProfile,
+    this.currentUserAuthor = 'sarahmae',
   });
 
   final FeedPostRepository? feedPostRepository;
@@ -33,6 +36,8 @@ class SearchScreen extends StatefulWidget {
   final VoidCallback? onPostSaved;
   final VoidCallback? onPostLiked;
   final int resetToken;
+  final EditableProfile? currentUserProfile;
+  final String currentUserAuthor;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -283,6 +288,8 @@ class _SearchScreenState extends State<SearchScreen> {
           likedPostRepository: widget.likedPostRepository,
           onPostLiked: widget.onPostLiked,
           onTap: () => _openPostComments(post),
+          currentUserProfile: widget.currentUserProfile,
+          currentUserAuthor: widget.currentUserAuthor,
         ),
       );
       index += 1;
@@ -296,6 +303,8 @@ class _SearchScreenState extends State<SearchScreen> {
         builder: (context) => CommentScreen(
           post: post,
           likedPostRepository: widget.likedPostRepository,
+          currentUserProfile: widget.currentUserProfile,
+          currentUserAuthor: widget.currentUserAuthor,
         ),
       ),
     );
@@ -335,13 +344,36 @@ class _SearchScreenState extends State<SearchScreen> {
   List<_SearchUser> _usersFromPosts(List<FeedPost> posts) {
     final byAuthor = _postsByAuthor(posts);
 
-    final users = [
-      for (final entry in byAuthor.entries)
-        _SearchUser.fromPosts(author: entry.key, posts: entry.value),
-    ];
+    final users =
+        [
+              for (final entry in byAuthor.entries)
+                _SearchUser.fromPosts(author: entry.key, posts: entry.value),
+            ]
+            .map((user) {
+              if (!_isCurrentUserAuthor(user.username)) return user;
+              final profile = widget.currentUserProfile;
+              if (profile == null) return user;
+              return user.copyWith(
+                username: profile.username,
+                name: profile.name,
+                initial: profile.username.isEmpty
+                    ? '?'
+                    : profile.username.characters.first.toUpperCase(),
+                color: kCirculGreen,
+                assetPath: profile.imagePath ?? avatarAsset,
+                imagePath: profile.imagePath,
+              );
+            })
+            .toList(growable: false);
 
     users.sort((first, second) => second.postCount.compareTo(first.postCount));
     return users;
+  }
+
+  bool _isCurrentUserAuthor(String author) {
+    return author.toLowerCase() == widget.currentUserAuthor.toLowerCase() ||
+        author.toLowerCase() ==
+            widget.currentUserProfile?.username.toLowerCase();
   }
 
   Map<String, List<FeedPost>> _postsByAuthor(List<FeedPost> posts) {
@@ -609,6 +641,8 @@ class _SearchPostResult extends StatelessWidget {
     this.onPostSaved,
     this.likedPostRepository,
     this.onPostLiked,
+    this.currentUserProfile,
+    this.currentUserAuthor = 'sarahmae',
   });
 
   final FeedPost post;
@@ -617,6 +651,8 @@ class _SearchPostResult extends StatelessWidget {
   final VoidCallback? onPostSaved;
   final LikedPostRepository? likedPostRepository;
   final VoidCallback? onPostLiked;
+  final EditableProfile? currentUserProfile;
+  final String currentUserAuthor;
 
   @override
   Widget build(BuildContext context) {
@@ -624,6 +660,13 @@ class _SearchPostResult extends StatelessWidget {
         ? post.timeAgo
         : formatRelativeTimestamp(post.createdAt!);
     final title = post.title.trim().isEmpty ? post.topic : post.title;
+    final isCurrentUserPost =
+        post.author.toLowerCase() == currentUserAuthor.toLowerCase() ||
+        post.author.toLowerCase() == currentUserProfile?.username.toLowerCase();
+    final profile = currentUserProfile;
+    final authorLabel = isCurrentUserPost && profile != null
+        ? profile.username
+        : post.author;
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
@@ -633,7 +676,11 @@ class _SearchPostResult extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SarahAvatar(radius: 26),
+            _SearchPostAvatar(
+              author: post.author,
+              imagePath: isCurrentUserPost ? profile?.imagePath : null,
+              fallbackToSarah: isCurrentUserPost,
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -645,7 +692,7 @@ class _SearchPostResult extends StatelessWidget {
                     runSpacing: 6,
                     children: [
                       Text(
-                        post.author,
+                        authorLabel,
                         style: const TextStyle(
                           color: kInk,
                           fontSize: 16,
@@ -1064,6 +1111,57 @@ class _SearchLikeActionState extends State<_SearchLikeAction> {
   }
 }
 
+class _SearchPostAvatar extends StatelessWidget {
+  const _SearchPostAvatar({
+    required this.author,
+    this.imagePath,
+    this.fallbackToSarah = false,
+  });
+
+  final String author;
+  final String? imagePath;
+  final bool fallbackToSarah;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = imagePath;
+    if (path != null && path.trim().isNotEmpty) {
+      return CircleAvatar(
+        radius: 26,
+        backgroundColor: const Color(0xFFE5E7EB),
+        child: ClipOval(
+          child: Image.file(
+            File(path),
+            width: 52,
+            height: 52,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                fallbackToSarah ? const SarahAvatar(radius: 26) : _fallback(),
+          ),
+        ),
+      );
+    }
+
+    if (fallbackToSarah) return const SarahAvatar(radius: 26);
+    return _fallback();
+  }
+
+  Widget _fallback() {
+    return CircleAvatar(
+      radius: 26,
+      backgroundColor: _avatarColor(author),
+      child: Text(
+        author.isEmpty ? '?' : author.characters.first.toUpperCase(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 25,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
 class _UserAvatar extends StatelessWidget {
   const _UserAvatar({required this.user});
 
@@ -1071,6 +1169,24 @@ class _UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imagePath = user.imagePath;
+    if (imagePath != null && imagePath.trim().isNotEmpty) {
+      return CircleAvatar(
+        radius: 27,
+        backgroundColor: const Color(0xFFE5E7EB),
+        child: ClipOval(
+          child: Image.file(
+            File(imagePath),
+            width: 54,
+            height: 54,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                const SarahAvatar(radius: 27),
+          ),
+        ),
+      );
+    }
+
     if (user.assetPath != null) return SarahAvatar(radius: 27);
 
     return CircleAvatar(
@@ -1113,6 +1229,7 @@ class _SearchUser {
     required this.initial,
     required this.color,
     this.assetPath,
+    this.imagePath,
   });
 
   factory _SearchUser.fromPosts({
@@ -1148,6 +1265,29 @@ class _SearchUser {
   final String initial;
   final Color color;
   final String? assetPath;
+  final String? imagePath;
+
+  _SearchUser copyWith({
+    String? username,
+    String? name,
+    int? postCount,
+    String? activeAgo,
+    String? initial,
+    Color? color,
+    String? assetPath,
+    String? imagePath,
+  }) {
+    return _SearchUser(
+      username: username ?? this.username,
+      name: name ?? this.name,
+      postCount: postCount ?? this.postCount,
+      activeAgo: activeAgo ?? this.activeAgo,
+      initial: initial ?? this.initial,
+      color: color ?? this.color,
+      assetPath: assetPath ?? this.assetPath,
+      imagePath: imagePath ?? this.imagePath,
+    );
+  }
 }
 
 String _displayName(String author) {

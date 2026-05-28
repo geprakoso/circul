@@ -36,6 +36,20 @@ class EditableProfile {
       imagePath: imagePath ?? this.imagePath,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is EditableProfile &&
+            name == other.name &&
+            username == other.username &&
+            bio == other.bio &&
+            location == other.location &&
+            imagePath == other.imagePath;
+  }
+
+  @override
+  int get hashCode => Object.hash(name, username, bio, location, imagePath);
 }
 
 class EditProfileScreen extends StatefulWidget {

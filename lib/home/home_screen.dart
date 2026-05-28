@@ -11,6 +11,7 @@ import '../feed_post_repository.dart';
 import '../liked_post_repository.dart';
 import '../mock_data.dart';
 import '../new_post/new_post_screen.dart';
+import '../profile/edit_profile_screen.dart';
 import '../saved_post_repository.dart';
 import '../shared/shared_widgets.dart';
 import 'widgets/feed_post_card.dart';
@@ -28,6 +29,7 @@ class HomeScreen extends StatefulWidget {
     this.likedPostRepository,
     this.onPostLiked,
     this.refreshToken = 0,
+    this.currentUserProfile,
     ImagePicker? imagePicker,
   }) : _imagePicker = imagePicker;
 
@@ -41,6 +43,7 @@ class HomeScreen extends StatefulWidget {
   final LikedPostRepository? likedPostRepository;
   final VoidCallback? onPostLiked;
   final int refreshToken;
+  final EditableProfile? currentUserProfile;
   final ImagePicker? _imagePicker;
 
   @override
@@ -91,6 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context) => CommentScreen(
           post: post,
           likedPostRepository: widget.likedPostRepository,
+          currentUserProfile: widget.currentUserProfile,
         ),
       ),
     );
@@ -237,6 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     onPostLiked: widget.onPostLiked,
                     onOpenComments: () => _openComments(post),
                     onOpenLocation: () => _openLocationPost(post),
+                    currentUserProfile: widget.currentUserProfile,
                   );
                 },
               );

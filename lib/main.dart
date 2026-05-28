@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -7,6 +9,7 @@ import 'home/home_screen.dart';
 import 'liked_post_repository.dart';
 import 'map/map_screen.dart';
 import 'mock_data.dart';
+import 'profile/edit_profile_screen.dart';
 import 'profile/profile_screen.dart';
 import 'saved_post_repository.dart';
 import 'search/search_screen.dart';
@@ -79,6 +82,13 @@ class _CirculShellState extends State<CirculShell> {
   var _profileRefreshToken = 0;
   var _mapCurrentLocationRefreshToken = 0;
   var _searchResetToken = 0;
+  var _currentUserProfile = const EditableProfile(
+    name: 'Sarah Mae',
+    username: 'sarahmae',
+    bio:
+        'Berusaha hidup lebih berkelanjutan 🌿\nBelajar, berbagi, dan berdampak.',
+    location: 'Jakarta, Indonesia',
+  );
   MapFocusedCheckIn? _focusedCheckIn;
   final _issueClusters = <MapIssueCluster>[];
 
@@ -152,7 +162,12 @@ class _CirculShellState extends State<CirculShell> {
         label: post.locationLabel ?? post.city,
         coordinateLabel: post.coordinateLabel,
         caption: post.body,
-        author: post.author,
+        author: _isCurrentUserPost(post)
+            ? _currentUserProfile.username
+            : post.author,
+        authorImagePath: _isCurrentUserPost(post)
+            ? _currentUserProfile.imagePath
+            : null,
         timeLabel: post.createdAt == null
             ? post.timeAgo
             : formatRelativeTimestamp(post.createdAt!),
@@ -160,6 +175,19 @@ class _CirculShellState extends State<CirculShell> {
         imagePaths: post.imagePaths,
       );
       _index = 1;
+    });
+  }
+
+  bool _isCurrentUserPost(FeedPost post) {
+    return post.author.toLowerCase() == 'sarahmae' ||
+        post.author.toLowerCase() == _currentUserProfile.username.toLowerCase();
+  }
+
+  void _handleProfileUpdated(EditableProfile profile) {
+    setState(() {
+      _currentUserProfile = profile;
+      _homeRefreshToken++;
+      _profileRefreshToken++;
     });
   }
 
@@ -192,6 +220,7 @@ class _CirculShellState extends State<CirculShell> {
         likedPostRepository: widget.likedPostRepository,
         onPostLiked: _refreshPostConsumers,
         refreshToken: _homeRefreshToken,
+        currentUserProfile: _currentUserProfile,
       ),
       MapScreen(
         issueClusters: _issueClusters,
@@ -201,6 +230,7 @@ class _CirculShellState extends State<CirculShell> {
         onCheckoutCompleted: _removeHeatmapLevel,
         focusedCheckIn: _focusedCheckIn,
         currentLocationRefreshToken: _mapCurrentLocationRefreshToken,
+        currentUserProfile: _currentUserProfile,
       ),
       SearchScreen(
         feedPostRepository: widget.feedPostRepository,
@@ -210,6 +240,7 @@ class _CirculShellState extends State<CirculShell> {
         onPostSaved: _refreshPostConsumers,
         onPostLiked: _refreshPostConsumers,
         resetToken: _searchResetToken,
+        currentUserProfile: _currentUserProfile,
       ),
       const EventScreen(),
       ProfileScreen(
@@ -217,6 +248,8 @@ class _CirculShellState extends State<CirculShell> {
         savedPostRepository: widget.savedPostRepository,
         likedPostRepository: widget.likedPostRepository,
         onPostUpdated: _refreshPostConsumers,
+        profile: _currentUserProfile,
+        onProfileUpdated: _handleProfileUpdated,
         refreshToken: _profileRefreshToken,
       ),
     ];
@@ -226,6 +259,7 @@ class _CirculShellState extends State<CirculShell> {
       bottomNavigationBar: CirculBottomNav(
         selectedIndex: _index,
         onChanged: _handleTabChanged,
+        currentUserProfile: _currentUserProfile,
       ),
     );
   }
@@ -236,10 +270,12 @@ class CirculBottomNav extends StatelessWidget {
     super.key,
     required this.selectedIndex,
     required this.onChanged,
+    this.currentUserProfile,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onChanged;
+  final EditableProfile? currentUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -272,6 +308,7 @@ class CirculBottomNav extends StatelessWidget {
                   item: items[i],
                   selected: selectedIndex == i,
                   onTap: () => onChanged(i),
+                  currentUserProfile: currentUserProfile,
                 ),
               ),
           ],
@@ -286,11 +323,13 @@ class _BottomNavButton extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.onTap,
+    this.currentUserProfile,
   });
 
   final _NavItem item;
   final bool selected;
   final VoidCallback onTap;
+  final EditableProfile? currentUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -306,7 +345,7 @@ class _BottomNavButton extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (item.label == 'Profil')
-              const SarahAvatar(radius: 18)
+              _NavProfileAvatar(profile: currentUserProfile)
             else
               Icon(
                 selected ? item.activeIcon : item.icon,
@@ -323,6 +362,35 @@ class _BottomNavButton extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavProfileAvatar extends StatelessWidget {
+  const _NavProfileAvatar({this.profile});
+
+  final EditableProfile? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePath = profile?.imagePath;
+    if (imagePath == null || imagePath.trim().isEmpty) {
+      return const SarahAvatar(radius: 18);
+    }
+
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: const Color(0xFFE5E7EB),
+      child: ClipOval(
+        child: Image.file(
+          File(imagePath),
+          width: 36,
+          height: 36,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              const SarahAvatar(radius: 18),
         ),
       ),
     );

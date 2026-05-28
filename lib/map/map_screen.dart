@@ -14,6 +14,7 @@ import '../check_in/capture_result_screen.dart';
 import '../comment_repository.dart';
 import '../feed_post_repository.dart';
 import '../mock_data.dart';
+import '../profile/edit_profile_screen.dart';
 import '../shared/relative_timestamp.dart';
 
 const _gondangManisCenter = LatLng(-7.5584, 110.8199);
@@ -37,6 +38,8 @@ class MapScreen extends StatefulWidget {
     this.onCheckoutCompleted,
     this.focusedCheckIn,
     this.currentLocationRefreshToken = 0,
+    this.currentUserProfile,
+    this.currentUserAuthor = 'sarahmae',
   });
 
   final List<MapIssueCluster> issueClusters;
@@ -46,6 +49,8 @@ class MapScreen extends StatefulWidget {
   final ValueChanged<LatLng>? onCheckoutCompleted;
   final MapFocusedCheckIn? focusedCheckIn;
   final int currentLocationRefreshToken;
+  final EditableProfile? currentUserProfile;
+  final String currentUserAuthor;
 
   static double distanceMeters(LatLng first, LatLng second) {
     return const Distance().as(LengthUnit.Meter, first, second);
@@ -589,6 +594,8 @@ class _MapScreenState extends State<MapScreen>
       _VisibleCheckIn.fromFocusedCheckIn(
         focusedCheckIn: focusedCheckIn,
         currentLocation: _checkInDistanceAnchor,
+        currentUserProfile: widget.currentUserProfile,
+        currentUserAuthor: widget.currentUserAuthor,
       ),
     );
   }
@@ -602,6 +609,8 @@ class _MapScreenState extends State<MapScreen>
         post: post,
         point: point,
         currentLocation: _checkInDistanceAnchor,
+        currentUserProfile: widget.currentUserProfile,
+        currentUserAuthor: widget.currentUserAuthor,
       ),
     );
   }
@@ -755,6 +764,8 @@ class _MapScreenState extends State<MapScreen>
         _VisibleCheckIn.fromFocusedCheckIn(
           focusedCheckIn: focusedCheckIn,
           currentLocation: distanceAnchor,
+          currentUserProfile: widget.currentUserProfile,
+          currentUserAuthor: widget.currentUserAuthor,
         ),
       for (final post in _feedCheckIns)
         if (post.locationPoint case final point?)
@@ -762,6 +773,8 @@ class _MapScreenState extends State<MapScreen>
             post: post,
             point: point,
             currentLocation: distanceAnchor,
+            currentUserProfile: widget.currentUserProfile,
+            currentUserAuthor: widget.currentUserAuthor,
           ),
       for (var i = 0; i < widget.issueClusters.length; i++)
         _VisibleCheckIn.fromCluster(
@@ -994,6 +1007,7 @@ class MapFocusedCheckIn {
     this.timeLabel = 'Baru saja',
     this.imageAsset = '',
     this.imagePaths = const [],
+    this.authorImagePath,
   });
 
   final int id;
@@ -1005,6 +1019,7 @@ class MapFocusedCheckIn {
   final String timeLabel;
   final String imageAsset;
   final List<String> imagePaths;
+  final String? authorImagePath;
 }
 
 class MapIssueCluster {
@@ -1086,6 +1101,7 @@ class _VisibleCheckIn {
     required this.distanceMeters,
     this.imageAsset = '',
     this.imagePaths = const [],
+    this.authorImagePath,
     this.post,
     this.isFocused = false,
   });
@@ -1093,15 +1109,25 @@ class _VisibleCheckIn {
   factory _VisibleCheckIn.fromFocusedCheckIn({
     required MapFocusedCheckIn focusedCheckIn,
     required LatLng currentLocation,
+    EditableProfile? currentUserProfile,
+    String currentUserAuthor = 'sarahmae',
   }) {
     final distanceMeters = MapScreen.distanceMeters(
       currentLocation,
       focusedCheckIn.point,
     );
 
+    final isCurrentUser =
+        focusedCheckIn.author.toLowerCase() ==
+            currentUserAuthor.toLowerCase() ||
+        focusedCheckIn.author.toLowerCase() ==
+            currentUserProfile?.username.toLowerCase();
+
     return _VisibleCheckIn(
       point: focusedCheckIn.point,
-      author: focusedCheckIn.author,
+      author: isCurrentUser && currentUserProfile != null
+          ? currentUserProfile.username
+          : focusedCheckIn.author,
       timeLabel: focusedCheckIn.timeLabel,
       title: focusedCheckIn.label,
       subtitle: focusedCheckIn.caption ?? 'Submitted check-in',
@@ -1111,6 +1137,9 @@ class _VisibleCheckIn {
       distanceMeters: distanceMeters,
       imageAsset: focusedCheckIn.imageAsset,
       imagePaths: focusedCheckIn.imagePaths,
+      authorImagePath: isCurrentUser
+          ? currentUserProfile?.imagePath ?? focusedCheckIn.authorImagePath
+          : focusedCheckIn.authorImagePath,
       isFocused: true,
     );
   }
@@ -1119,15 +1148,23 @@ class _VisibleCheckIn {
     required FeedPost post,
     required LatLng point,
     required LatLng currentLocation,
+    EditableProfile? currentUserProfile,
+    String currentUserAuthor = 'sarahmae',
   }) {
     final distanceMeters = MapScreen.distanceMeters(currentLocation, point);
     final timestamp = post.createdAt == null
         ? post.timeAgo
         : formatRelativeTimestamp(post.createdAt!);
 
+    final isCurrentUser =
+        post.author.toLowerCase() == currentUserAuthor.toLowerCase() ||
+        post.author.toLowerCase() == currentUserProfile?.username.toLowerCase();
+
     return _VisibleCheckIn(
       point: point,
-      author: post.author,
+      author: isCurrentUser && currentUserProfile != null
+          ? currentUserProfile.username
+          : post.author,
       timeLabel: timestamp,
       title: post.locationLabel ?? post.city,
       subtitle: post.body,
@@ -1137,6 +1174,7 @@ class _VisibleCheckIn {
       distanceMeters: distanceMeters,
       imageAsset: post.imageAsset,
       imagePaths: post.imagePaths,
+      authorImagePath: isCurrentUser ? currentUserProfile?.imagePath : null,
       post: post,
     );
   }
@@ -1201,6 +1239,7 @@ class _VisibleCheckIn {
   final double distanceMeters;
   final String imageAsset;
   final List<String> imagePaths;
+  final String? authorImagePath;
   final FeedPost? post;
   final bool isFocused;
 
@@ -2063,22 +2102,7 @@ class _CheckInResultTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 54,
-              height: 54,
-              decoration: const BoxDecoration(
-                color: Color(0xFFD9D9D9),
-                shape: BoxShape.circle,
-              ),
-              child: ClipOval(
-                child: Image.asset(
-                  avatarAsset,
-                  width: 54,
-                  height: 54,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
+            _CheckInAuthorAvatar(imagePath: item.authorImagePath),
             const SizedBox(width: 18),
             Expanded(
               child: Column(
@@ -2159,6 +2183,42 @@ class _CheckInResultTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CheckInAuthorAvatar extends StatelessWidget {
+  const _CheckInAuthorAvatar({this.imagePath});
+
+  final String? imagePath;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = imagePath;
+
+    return Container(
+      width: 54,
+      height: 54,
+      decoration: const BoxDecoration(
+        color: Color(0xFFD9D9D9),
+        shape: BoxShape.circle,
+      ),
+      child: ClipOval(
+        child: path == null || path.trim().isEmpty
+            ? Image.asset(avatarAsset, width: 54, height: 54, fit: BoxFit.cover)
+            : Image.file(
+                File(path),
+                width: 54,
+                height: 54,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Image.asset(
+                  avatarAsset,
+                  width: 54,
+                  height: 54,
+                  fit: BoxFit.cover,
+                ),
+              ),
       ),
     );
   }

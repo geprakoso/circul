@@ -7,6 +7,7 @@ import '../../image_viewer/uploaded_image_fullscreen_page.dart';
 import '../../liked_post_repository.dart';
 import '../../mock_data.dart';
 import '../../new_post/widgets/attachment_media_strip.dart';
+import '../../profile/edit_profile_screen.dart';
 import '../../saved_post_repository.dart';
 import '../../shared/animated_like_icon.dart';
 import '../../shared/relative_timestamp.dart';
@@ -28,6 +29,8 @@ class FeedPostCard extends StatefulWidget {
     this.onPostLiked,
     this.onOpenComments,
     this.onOpenLocation,
+    this.currentUserProfile,
+    this.currentUserAuthor = 'sarahmae',
   });
 
   final FeedPost post;
@@ -42,6 +45,8 @@ class FeedPostCard extends StatefulWidget {
   final VoidCallback? onPostLiked;
   final VoidCallback? onOpenComments;
   final VoidCallback? onOpenLocation;
+  final EditableProfile? currentUserProfile;
+  final String currentUserAuthor;
 
   @override
   State<FeedPostCard> createState() => _FeedPostCardState();
@@ -121,6 +126,17 @@ class _FeedPostCardState extends State<FeedPostCard> {
     final timestamp = widget.post.createdAt == null
         ? widget.post.timeAgo
         : formatRelativeTimestamp(widget.post.createdAt!);
+    final isCurrentUserPost =
+        widget.post.author.toLowerCase() ==
+            widget.currentUserAuthor.toLowerCase() ||
+        widget.post.author.toLowerCase() ==
+            widget.currentUserProfile?.username.toLowerCase();
+    final currentProfile = widget.currentUserProfile;
+    final authorLabel = isCurrentUserPost && currentProfile != null
+        ? (widget.compact ? currentProfile.name : currentProfile.username)
+        : (widget.compact
+              ? _displayName(widget.post.author)
+              : widget.post.author);
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,7 +144,12 @@ class _FeedPostCardState extends State<FeedPostCard> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SarahAvatar(radius: widget.compact ? 20 : 24),
+            _PostAuthorAvatar(
+              radius: widget.compact ? 20 : 24,
+              imagePath: isCurrentUserPost ? currentProfile?.imagePath : null,
+              fallbackToSarah: isCurrentUserPost,
+              author: widget.post.author,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -138,7 +159,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
                     children: [
                       Flexible(
                         child: Text(
-                          widget.compact ? 'Sarah Mae' : widget.post.author,
+                          authorLabel,
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(
                                 fontSize: widget.compact ? 15 : 16,
@@ -492,6 +513,85 @@ class _LocalPostImage extends StatelessWidget {
       ),
     );
   }
+}
+
+class _PostAuthorAvatar extends StatelessWidget {
+  const _PostAuthorAvatar({
+    required this.radius,
+    required this.author,
+    this.imagePath,
+    this.fallbackToSarah = false,
+  });
+
+  final double radius;
+  final String author;
+  final String? imagePath;
+  final bool fallbackToSarah;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = imagePath;
+    if (path != null && path.trim().isNotEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: const Color(0xFFE5E7EB),
+        child: ClipOval(
+          child: Image.file(
+            File(path),
+            width: radius * 2,
+            height: radius * 2,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                fallbackToSarah ? SarahAvatar(radius: radius) : _fallback(),
+          ),
+        ),
+      );
+    }
+
+    if (fallbackToSarah) return SarahAvatar(radius: radius);
+    return _fallback();
+  }
+
+  Widget _fallback() {
+    final initial = author.isEmpty
+        ? '?'
+        : author.characters.first.toUpperCase();
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: _avatarColor(author),
+      child: Text(
+        initial,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: radius * .95,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+String _displayName(String author) {
+  if (author == 'sarahmae') return 'Sarah Mae';
+  return author
+      .split(RegExp(r'[._-]'))
+      .where((part) => part.isNotEmpty)
+      .map(
+        (part) => '${part.characters.first.toUpperCase()}${part.substring(1)}',
+      )
+      .join(' ');
+}
+
+Color _avatarColor(String value) {
+  const colors = [
+    Color(0xFF16A34A),
+    Color(0xFF2563EB),
+    Color(0xFFEA580C),
+    Color(0xFF7C3AED),
+  ];
+  if (value.isEmpty) return colors.first;
+  final index = value.codeUnits.fold<int>(0, (sum, unit) => sum + unit);
+  return colors[index % colors.length];
 }
 
 class _Pill extends StatelessWidget {

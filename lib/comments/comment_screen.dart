@@ -5,6 +5,7 @@ import '../home/widgets/feed_post_card.dart';
 import '../liked_post_repository.dart';
 import '../mock_data.dart';
 import '../new_post/widgets/attachment_media_strip.dart';
+import '../profile/edit_profile_screen.dart';
 
 class CommentScreen extends StatefulWidget {
   const CommentScreen({
@@ -12,11 +13,15 @@ class CommentScreen extends StatefulWidget {
     required this.post,
     this.commentRepository,
     this.likedPostRepository,
+    this.currentUserProfile,
+    this.currentUserAuthor = 'sarahmae',
   });
 
   final FeedPost post;
   final CommentRepository? commentRepository;
   final LikedPostRepository? likedPostRepository;
+  final EditableProfile? currentUserProfile;
+  final String currentUserAuthor;
 
   @override
   State<CommentScreen> createState() => _CommentScreenState();
@@ -115,6 +120,8 @@ class _CommentScreenState extends State<CommentScreen> {
                           post: _post,
                           likedPostRepository: _likedPostRepository,
                           onPostLiked: _handlePostLiked,
+                          currentUserProfile: widget.currentUserProfile,
+                          currentUserAuthor: widget.currentUserAuthor,
                         ),
                         const Divider(height: 1, color: kLine),
                         if (snapshot.connectionState ==

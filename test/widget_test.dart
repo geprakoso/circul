@@ -483,6 +483,68 @@ void main() {
     expect(find.text('Profil diperbarui.'), findsOneWidget);
   });
 
+  testWidgets('profile edits update own posts and check-ins', (tester) async {
+    const post = FeedPost(
+      id: 'check_in_post',
+      author: 'sarahmae',
+      city: 'Solo',
+      timeAgo: 'Baru saja',
+      title: 'Check-in Lingkungan',
+      body: 'Area ini sudah dicek.',
+      imageAsset: '',
+      locationEnabled: true,
+      locationLabel: 'Warung Hijau',
+      locationLatitude: -7.5584,
+      locationLongitude: 110.8199,
+      likes: 0,
+      comments: 0,
+    );
+
+    await tester.pumpWidget(
+      CirculApp(
+        feedPostRepository: _FakeFeedPostRepository(posts: [post]),
+        likedPostRepository: _FakeLikedPostRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Profil'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit Profil'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Name'),
+      'Maya Green',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Username'),
+      'mayagreen',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Bio'),
+      'Belajar hidup minim sampah.',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'City, Country'),
+      'Solo, Indonesia',
+    );
+    await tester.tap(find.text('Simpan'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+    expect(find.text('mayagreen'), findsOneWidget);
+    expect(find.text('sarahmae'), findsNothing);
+
+    await tester.tap(find.text('Peta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Check-in Warung Hijau'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detail check-in'), findsOneWidget);
+    expect(find.text('mayagreen'), findsOneWidget);
+  });
+
   testWidgets('profile komentar tab renders user comment with source post', (
     tester,
   ) async {

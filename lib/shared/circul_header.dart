@@ -47,10 +47,16 @@ class _CirculLogoPainter extends CustomPainter {
 }
 
 class CirculHeader extends StatelessWidget {
-  const CirculHeader({super.key, this.showChat = true, this.title = 'Circul'});
+  const CirculHeader({
+    super.key,
+    this.showChat = true,
+    this.title = 'Circul',
+    this.primaryAction = const NotificationIcon(),
+  });
 
   final bool showChat;
   final String title;
+  final Widget primaryAction;
 
   @override
   Widget build(BuildContext context) {
@@ -68,7 +74,7 @@ class CirculHeader extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          const NotificationIcon(),
+          primaryAction,
           if (showChat) ...[
             const SizedBox(width: 14),
             IconButton(

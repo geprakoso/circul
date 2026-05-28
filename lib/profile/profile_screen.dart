@@ -20,19 +20,29 @@ import 'widgets/segmented_profile_tabs.dart';
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
+    this.profile = const EditableProfile(
+      name: 'Sarah Mae',
+      username: _ProfileScreenState._profileAuthor,
+      bio:
+          'Berusaha hidup lebih berkelanjutan 🌿\nBelajar, berbagi, dan berdampak.',
+      location: 'Jakarta, Indonesia',
+    ),
     this.feedPostRepository,
     this.commentRepository,
     this.savedPostRepository,
     this.likedPostRepository,
     this.onPostUpdated,
+    this.onProfileUpdated,
     this.refreshToken = 0,
   });
 
+  final EditableProfile profile;
   final FeedPostRepository? feedPostRepository;
   final CommentRepository? commentRepository;
   final SavedPostRepository? savedPostRepository;
   final LikedPostRepository? likedPostRepository;
   final VoidCallback? onPostUpdated;
+  final ValueChanged<EditableProfile>? onProfileUpdated;
   final int refreshToken;
 
   @override
@@ -42,13 +52,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   static const _profileAuthor = 'sarahmae';
 
-  var _profile = const EditableProfile(
-    name: 'Sarah Mae',
-    username: _profileAuthor,
-    bio:
-        'Berusaha hidup lebih berkelanjutan 🌿\nBelajar, berbagi, dan berdampak.',
-    location: 'Jakarta, Indonesia',
-  );
+  late var _profile = widget.profile;
   var _selectedTab = 'Postingan';
   late final FeedPostRepository _repository;
   late final CommentRepository _commentRepository;
@@ -73,6 +77,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void didUpdateWidget(covariant ProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.profile != widget.profile) {
+      _profile = widget.profile;
+    }
     if (oldWidget.refreshToken != widget.refreshToken) {
       _refreshProfileFeedData();
     }
@@ -129,6 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         builder: (context) => CommentScreen(
           post: post,
           likedPostRepository: _likedPostRepository,
+          currentUserProfile: _profile,
         ),
       ),
     );
@@ -146,7 +154,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final takenUsernames = {
       for (final post in posts)
-        if (post.author.toLowerCase() != _profile.username.toLowerCase())
+        if (post.author.toLowerCase() != _profile.username.toLowerCase() &&
+            post.author.toLowerCase() != _profileAuthor)
           post.author,
     };
 
@@ -161,6 +170,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted || updatedProfile == null) return;
 
     setState(() => _profile = updatedProfile);
+    widget.onProfileUpdated?.call(updatedProfile);
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('Profil diperbarui.')));
@@ -173,7 +183,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: ListView(
         padding: const EdgeInsets.only(bottom: 22),
         children: [
-          const CirculHeader(showChat: false),
+          const CirculHeader(
+            showChat: false,
+            primaryAction: _ProfileMenuButton(),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
             child: Row(
@@ -274,6 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPostSaved: _handlePostSaved,
               likedPostRepository: _likedPostRepository,
               onPostLiked: _handlePostLiked,
+              currentUserProfile: _profile,
             )
           else if (_selectedTab == 'Komentar')
             _ProfileCommentsTab(
@@ -283,6 +297,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPostSaved: _handlePostSaved,
               likedPostRepository: _likedPostRepository,
               onPostLiked: _handlePostLiked,
+              currentUserProfile: _profile,
             )
           else if (_selectedTab == 'Disimpan')
             _ProfileSavedPostsTab(
@@ -292,6 +307,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onSavedPostDeleted: _handleSavedPostDeleted,
               likedPostRepository: _likedPostRepository,
               onPostLiked: _handlePostLiked,
+              currentUserProfile: _profile,
             )
           else
             ProfilePlaceholder(tab: _selectedTab),
@@ -335,6 +351,59 @@ class _ProfileAvatar extends StatelessWidget {
   }
 }
 
+class _ProfileMenuButton extends StatelessWidget {
+  const _ProfileMenuButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Menu profil',
+      onPressed: () {},
+      icon: const _TwoLineMenuIcon(),
+    );
+  }
+}
+
+class _TwoLineMenuIcon extends StatelessWidget {
+  const _TwoLineMenuIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 30,
+      height: 30,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            _MenuLine(width: 24),
+            SizedBox(height: 7),
+            _MenuLine(width: 24),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuLine extends StatelessWidget {
+  const _MenuLine({required this.width});
+
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 2.6,
+      decoration: BoxDecoration(
+        color: kInk,
+        borderRadius: BorderRadius.circular(999),
+      ),
+    );
+  }
+}
+
 class _ProfilePostsTab extends StatelessWidget {
   const _ProfilePostsTab({
     required this.postsFuture,
@@ -343,6 +412,7 @@ class _ProfilePostsTab extends StatelessWidget {
     required this.onPostSaved,
     required this.likedPostRepository,
     required this.onPostLiked,
+    required this.currentUserProfile,
   });
 
   static const _profileAuthor = 'sarahmae';
@@ -353,6 +423,7 @@ class _ProfilePostsTab extends StatelessWidget {
   final VoidCallback onPostSaved;
   final LikedPostRepository likedPostRepository;
   final VoidCallback onPostLiked;
+  final EditableProfile currentUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -397,6 +468,7 @@ class _ProfilePostsTab extends StatelessWidget {
                 onPostSaved: onPostSaved,
                 likedPostRepository: likedPostRepository,
                 onPostLiked: onPostLiked,
+                currentUserProfile: currentUserProfile,
                 onOpenComments: () => onOpenComments(posts[i]),
               ),
               if (i != posts.length - 1)
@@ -423,6 +495,7 @@ class _ProfileCommentsTab extends StatelessWidget {
     required this.onPostSaved,
     required this.likedPostRepository,
     required this.onPostLiked,
+    required this.currentUserProfile,
   });
 
   final Future<List<UserCommentResult>> commentsFuture;
@@ -431,6 +504,7 @@ class _ProfileCommentsTab extends StatelessWidget {
   final VoidCallback onPostSaved;
   final LikedPostRepository likedPostRepository;
   final VoidCallback onPostLiked;
+  final EditableProfile currentUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -471,6 +545,7 @@ class _ProfileCommentsTab extends StatelessWidget {
                 onPostSaved: onPostSaved,
                 likedPostRepository: likedPostRepository,
                 onPostLiked: onPostLiked,
+                currentUserProfile: currentUserProfile,
               ),
               if (i != results.length - 1)
                 const Divider(height: 1, thickness: 1, color: kLine),
@@ -490,6 +565,7 @@ class _ProfileCommentResultCard extends StatelessWidget {
     required this.onPostSaved,
     required this.likedPostRepository,
     required this.onPostLiked,
+    required this.currentUserProfile,
   });
 
   final UserCommentResult result;
@@ -498,6 +574,7 @@ class _ProfileCommentResultCard extends StatelessWidget {
   final VoidCallback onPostSaved;
   final LikedPostRepository likedPostRepository;
   final VoidCallback onPostLiked;
+  final EditableProfile currentUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -521,6 +598,7 @@ class _ProfileCommentResultCard extends StatelessWidget {
               onPostSaved: onPostSaved,
               likedPostRepository: likedPostRepository,
               onPostLiked: onPostLiked,
+              currentUserProfile: currentUserProfile,
               onOpenComments: onOpenComments,
             ),
           ),
@@ -538,6 +616,7 @@ class _ProfileSavedPostsTab extends StatelessWidget {
     required this.onSavedPostDeleted,
     required this.likedPostRepository,
     required this.onPostLiked,
+    required this.currentUserProfile,
   });
 
   final Future<List<FeedPost>> savedPostsFuture;
@@ -546,6 +625,7 @@ class _ProfileSavedPostsTab extends StatelessWidget {
   final VoidCallback onSavedPostDeleted;
   final LikedPostRepository likedPostRepository;
   final VoidCallback onPostLiked;
+  final EditableProfile currentUserProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -589,6 +669,7 @@ class _ProfileSavedPostsTab extends StatelessWidget {
                 savedTabOptions: true,
                 likedPostRepository: likedPostRepository,
                 onPostLiked: onPostLiked,
+                currentUserProfile: currentUserProfile,
                 onOpenComments: () => onOpenComments(posts[i]),
               ),
               if (i != posts.length - 1)
