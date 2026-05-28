@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:fuzzy_search_engine/fuzzy_search_engine.dart';
 import 'package:flutter/material.dart';
 
 import '../comments/comment_screen.dart';
@@ -37,6 +38,10 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   static const _tabs = ['Semua', 'Postingan', 'Pengguna'];
+  static const _searchConfig = SearchConfig(
+    searchFields: ['name', 'subtitle', 'searchData'],
+    fieldWeights: {'name': 1, 'subtitle': .75, 'searchData': .55},
+  );
 
   late final FeedPostRepository _repository;
   late Future<List<FeedPost>> _postsFuture;
@@ -226,14 +231,26 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   List<FeedPost> _rankPosts(List<FeedPost> posts, String query) {
-    final normalizedQuery = _normalize(query);
-    final matches = posts.where((post) {
-      return _normalize(
-        '${post.author} ${post.title} ${post.body} ${post.topic}',
-      ).contains(normalizedQuery);
-    }).toList();
-    final fallback = posts.where((post) => !matches.contains(post));
-    return [...matches, ...fallback];
+    final items = [
+      for (var i = 0; i < posts.length; i++)
+        SearchableItem(
+          id: _postSearchId(posts[i], i),
+          name: _postSearchName(posts[i]),
+          subtitle: posts[i].body,
+          searchData: _postSearchData(posts[i]),
+          data: posts[i],
+        ),
+    ];
+    final results = SearchEngine.fuzzySearch(
+      items,
+      query,
+      config: _searchConfig,
+    );
+    if (results.isEmpty) return posts;
+    return [
+      for (final result in results)
+        if (result.data case final FeedPost post) post,
+    ];
   }
 
   List<Widget> _postResultWidgets(Iterable<FeedPost> posts) {
@@ -277,22 +294,32 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   List<_SearchUser> _rankUsers(List<FeedPost> posts, String query) {
-    final normalizedQuery = _normalize(query);
     final users = _usersFromPosts(posts);
-    final matches = users.where((user) {
-      return _normalize(
-        '${user.username} ${user.name}',
-      ).contains(normalizedQuery);
-    }).toList();
-    final fallback = users.where((user) => !matches.contains(user));
-    return [...matches, ...fallback];
+    final postsByAuthor = _postsByAuthor(posts);
+    final items = [
+      for (final user in users)
+        SearchableItem(
+          id: user.username,
+          name: user.username,
+          subtitle: user.name,
+          searchData: _userSearchData(postsByAuthor[user.username] ?? const []),
+          data: user,
+        ),
+    ];
+    final results = SearchEngine.fuzzySearch(
+      items,
+      query,
+      config: _searchConfig,
+    );
+    if (results.isEmpty) return users;
+    return [
+      for (final result in results)
+        if (result.data case final _SearchUser user) user,
+    ];
   }
 
   List<_SearchUser> _usersFromPosts(List<FeedPost> posts) {
-    final byAuthor = <String, List<FeedPost>>{};
-    for (final post in posts) {
-      byAuthor.putIfAbsent(post.author, () => []).add(post);
-    }
+    final byAuthor = _postsByAuthor(posts);
 
     final users = [
       for (final entry in byAuthor.entries)
@@ -301,6 +328,50 @@ class _SearchScreenState extends State<SearchScreen> {
 
     users.sort((first, second) => second.postCount.compareTo(first.postCount));
     return users;
+  }
+
+  Map<String, List<FeedPost>> _postsByAuthor(List<FeedPost> posts) {
+    final byAuthor = <String, List<FeedPost>>{};
+    for (final post in posts) {
+      byAuthor.putIfAbsent(post.author, () => []).add(post);
+    }
+    return byAuthor;
+  }
+
+  String _postSearchId(FeedPost post, int index) {
+    final id = post.id.trim();
+    return id.isEmpty ? 'post-$index' : id;
+  }
+
+  String _postSearchName(FeedPost post) {
+    final title = post.title.trim();
+    if (title.isNotEmpty) return title;
+
+    final topic = post.topic.trim();
+    if (topic.isNotEmpty) return topic;
+
+    return post.author;
+  }
+
+  String _postSearchData(FeedPost post) {
+    return [
+      post.author,
+      post.city,
+      post.topic,
+      post.locationLabel,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
+  }
+
+  String _userSearchData(List<FeedPost> posts) {
+    return [
+      for (final post in posts) ...[
+        post.title,
+        post.topic,
+        post.body,
+        post.city,
+        post.locationLabel,
+      ],
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
   }
 
   String _normalize(String value) => value.toLowerCase().trim();

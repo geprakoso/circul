@@ -216,6 +216,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  fuzzy_search_engine:
+    dependency: "direct main"
+    description:
+      name: fuzzy_search_engine
+      sha256: fe70c98ac9c598858f9c31bdeae314f1ff222075768beba3c705601a728df3b0
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.0"
   geoclue:
     dependency: transitive
     description:

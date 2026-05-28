@@ -7,6 +7,7 @@ import 'package:circul/map/map_screen.dart';
 import 'package:circul/mock_data.dart';
 import 'package:circul/profile/profile_screen.dart';
 import 'package:circul/saved_post_repository.dart';
+import 'package:circul/search/search_screen.dart';
 import 'package:circul/shared/animated_like_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -201,6 +202,125 @@ void main() {
     );
     expect(find.bySemanticsLabel('Check-in Warung Hijau'), findsNothing);
     expect(find.bySemanticsLabel('Check-in Taman Dekat'), findsNothing);
+  });
+
+  testWidgets('search ranks typo query with fuzzy post matching', (
+    tester,
+  ) async {
+    final posts = [
+      const FeedPost(
+        id: 'gardening',
+        author: 'ninaeco',
+        city: 'Solo',
+        timeAgo: '1 jam',
+        title: 'Urban gardening akhir pekan',
+        body: 'Menanam cabai dan tomat di halaman kecil.',
+        imageAsset: '',
+        topic: 'Tanaman & Kebun',
+        likes: 3,
+        comments: 1,
+      ),
+      const FeedPost(
+        id: 'river',
+        author: 'rakaearth',
+        city: 'Solo',
+        timeAgo: '2 jam',
+        title: 'Komunitas bersih sungai',
+        body: 'Agenda bersih sungai bareng warga sekitar.',
+        imageAsset: '',
+        topic: 'Komunitas Lokal',
+        likes: 4,
+        comments: 2,
+      ),
+      feedPosts[0],
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SearchScreen(
+            feedPostRepository: _FakeFeedPostRepository(posts: posts),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search message, topic, or user'),
+      'sampa plastik',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Tips mengurangi sampah plastik di rumah 🌿'),
+      findsOneWidget,
+    );
+    expect(find.text('Topik'), findsNothing);
+  });
+
+  testWidgets('search ranks user by fuzzy author query', (tester) async {
+    final posts = [
+      const FeedPost(
+        id: 'nina',
+        author: 'ninaeco',
+        city: 'Solo',
+        timeAgo: '1 jam',
+        title: 'Urban gardening',
+        body: 'Kebun kecil di rumah.',
+        imageAsset: '',
+        likes: 3,
+        comments: 1,
+      ),
+      const FeedPost(
+        id: 'raka',
+        author: 'rakaearth',
+        city: 'Solo',
+        timeAgo: '2 jam',
+        title: 'Bersih sungai',
+        body: 'Kegiatan komunitas.',
+        imageAsset: '',
+        likes: 4,
+        comments: 2,
+      ),
+      const FeedPost(
+        id: 'lani',
+        author: 'lanihijau',
+        city: 'Solo',
+        timeAgo: '3 jam',
+        title: 'Daur ulang botol',
+        body: 'Botol bekas jadi pot.',
+        imageAsset: '',
+        likes: 5,
+        comments: 1,
+      ),
+      feedPosts[0],
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SearchScreen(
+            feedPostRepository: _FakeFeedPostRepository(posts: posts),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search message, topic, or user'),
+      'srahmae',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pengguna').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('sarahmae'), findsOneWidget);
+    expect(find.text('Sarah Mae'), findsOneWidget);
+    expect(find.text('Topik'), findsNothing);
   });
 
   testWidgets('profile postingan tab renders all posts by Sarah', (
