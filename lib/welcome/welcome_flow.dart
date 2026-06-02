@@ -37,11 +37,15 @@ class WelcomeFlow extends StatefulWidget {
 }
 
 class _WelcomeFlowState extends State<WelcomeFlow> {
+  static const _transitionDuration = Duration(milliseconds: 300);
+
   var _step = _WelcomeStep.welcome;
+  var _transitionDirection = 1;
   final _history = <_WelcomeStep>[];
 
   void _go(_WelcomeStep step) {
     setState(() {
+      _transitionDirection = 1;
       _history.add(_step);
       _step = step;
     });
@@ -49,7 +53,10 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
 
   void _back() {
     if (_history.isEmpty) return;
-    setState(() => _step = _history.removeLast());
+    setState(() {
+      _transitionDirection = -1;
+      _step = _history.removeLast();
+    });
   }
 
   Future<void> _continueWithProvider(WelcomeAuthProvider provider) async {
@@ -65,7 +72,7 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
 
   @override
   Widget build(BuildContext context) {
-    return switch (_step) {
+    final screen = switch (_step) {
       _WelcomeStep.welcome => _WelcomeScreen(
         onStart: () => _go(_WelcomeStep.loginMethod),
       ),
@@ -106,6 +113,25 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
         onContinue: widget.onComplete,
       ),
     };
+
+    return AnimatedSwitcher(
+      duration: _transitionDuration,
+      switchInCurve: Curves.fastOutSlowIn,
+      switchOutCurve: Curves.fastOutSlowIn,
+      transitionBuilder: (child, animation) {
+        final isIncoming = child.key == ValueKey(_step);
+        final direction = _transitionDirection.toDouble();
+        final slide = Tween<Offset>(
+          begin: Offset(isIncoming ? direction : -direction, 0),
+          end: Offset.zero,
+        ).animate(animation);
+
+        return ClipRect(
+          child: SlideTransition(position: slide, child: child),
+        );
+      },
+      child: KeyedSubtree(key: ValueKey(_step), child: screen),
+    );
   }
 }
 
@@ -415,7 +441,7 @@ class _VerifyMethodScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
-            SizedBox(height: 58),
+            SizedBox(height: 36),
             _ScreenTitle(
               title: 'Verify your account',
               subtitle:
@@ -514,7 +540,7 @@ class _OtpVerificationScreen extends StatelessWidget {
     return _WelcomeScaffold(
       header: isWhatsapp
           ? _BackHeader(onBack: onBack)
-          : _BackHeader(onBack: onBack, title: 'Circul'),
+          : _BackHeader(onBack: onBack, title: 'Circul', titleOnLeft: true),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -706,25 +732,31 @@ class _WelcomeScaffold extends StatelessWidget {
               children: [
                 ?header,
                 Expanded(
-                  child: scrollBody
-                      ? LayoutBuilder(
-                          builder: (context, constraints) {
-                            return SingleChildScrollView(
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minHeight: constraints.maxHeight,
+                  child: _EntranceMotion(
+                    delay: const Duration(milliseconds: 70),
+                    child: scrollBody
+                        ? LayoutBuilder(
+                            builder: (context, constraints) {
+                              return SingleChildScrollView(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: constraints.maxHeight,
+                                  ),
+                                  child: body,
                                 ),
-                                child: body,
-                              ),
-                            );
-                          },
-                        )
-                      : body,
+                              );
+                            },
+                          )
+                        : body,
+                  ),
                 ),
                 if (bottom case final bottom?)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                    child: bottom,
+                  _EntranceMotion(
+                    delay: const Duration(milliseconds: 130),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                      child: bottom,
+                    ),
                   ),
               ],
             ),
@@ -735,14 +767,98 @@ class _WelcomeScaffold extends StatelessWidget {
   }
 }
 
-class _BackHeader extends StatelessWidget {
-  const _BackHeader({required this.onBack, this.title});
+class _EntranceMotion extends StatefulWidget {
+  const _EntranceMotion({required this.child, this.delay = Duration.zero});
 
-  final VoidCallback onBack;
-  final String? title;
+  final Widget child;
+  final Duration delay;
+
+  @override
+  State<_EntranceMotion> createState() => _EntranceMotionState();
+}
+
+class _EntranceMotionState extends State<_EntranceMotion>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+    final curve = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    );
+    _opacity = Tween<double>(begin: 0, end: 1).animate(curve);
+
+    if (widget.delay == Duration.zero) {
+      _controller.forward();
+    } else {
+      Future<void>.delayed(widget.delay, () {
+        if (mounted) _controller.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    return FadeTransition(opacity: _opacity, child: widget.child);
+  }
+}
+
+class _BackHeader extends StatelessWidget {
+  const _BackHeader({
+    required this.onBack,
+    this.title,
+    this.titleOnLeft = false,
+  });
+
+  final VoidCallback onBack;
+  final String? title;
+  final bool titleOnLeft;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = this.title;
+    if (titleOnLeft && title != null) {
+      return SizedBox(
+        height: 58,
+        child: Row(
+          children: [
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Back',
+              onPressed: onBack,
+              icon: const Icon(
+                Icons.arrow_back_rounded,
+                color: Color(0xFF075734),
+                size: 26,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Color(0xFF075734),
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return SizedBox(
       height: 58,
       child: Stack(
@@ -762,7 +878,7 @@ class _BackHeader extends StatelessWidget {
           ),
           if (title != null)
             Text(
-              title!,
+              title,
               style: const TextStyle(
                 color: Color(0xFF075734),
                 fontSize: 20,
@@ -783,23 +899,28 @@ class _ScreenTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            color: Color(0xFF45504C),
-            fontSize: 16,
-            height: 1.45,
+    return SizedBox(
+      width: double.infinity,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            textAlign: TextAlign.left,
+            style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900),
           ),
-        ),
-      ],
+          const SizedBox(height: 10),
+          Text(
+            subtitle,
+            textAlign: TextAlign.left,
+            style: const TextStyle(
+              color: Color(0xFF45504C),
+              fontSize: 16,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
