@@ -11,7 +11,7 @@ import '../feed_post_repository.dart';
 import '../liked_post_repository.dart';
 import '../mock_data.dart';
 import '../new_post/new_post_screen.dart';
-import '../profile/edit_profile_screen.dart';
+import '../profile/editable_profile.dart';
 import '../saved_post_repository.dart';
 import '../shared/shared_widgets.dart';
 import 'widgets/feed_post_card.dart';

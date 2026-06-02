@@ -10,6 +10,7 @@ class CirculDatabase {
   static const postCommentsTable = 'post_comments';
   static const savedPostsTable = 'saved_posts';
   static const likedPostsTable = 'liked_posts';
+  static const usersTable = 'users';
 
   Database? _database;
 
@@ -20,7 +21,7 @@ class CirculDatabase {
     final dbPath = await getDatabasesPath();
     final database = await openDatabase(
       p.join(dbPath, 'circul.db'),
-      version: 8,
+      version: 9,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -37,6 +38,7 @@ class CirculDatabase {
     await _createPostCommentsTable(db);
     await _createSavedPostsTable(db);
     await _createLikedPostsTable(db);
+    await _createUsersTable(db);
   }
 
   Future<void> _createFeedPostsTable(Database db) async {
@@ -133,6 +135,32 @@ class CirculDatabase {
     );
   }
 
+  Future<void> _createUsersTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $usersTable (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        username TEXT NOT NULL UNIQUE,
+        bio TEXT NOT NULL,
+        location TEXT NOT NULL,
+        image_path TEXT,
+        is_current INTEGER NOT NULL DEFAULT 0,
+        sync_status TEXT NOT NULL DEFAULT 'local',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username '
+      'ON $usersTable(username COLLATE NOCASE)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_users_is_current '
+      'ON $usersTable(is_current)',
+    );
+  }
+
   Future<void> _upgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await db.execute(
@@ -192,6 +220,9 @@ class CirculDatabase {
     }
     if (oldVersion < 8) {
       await _createLikedPostsTable(db);
+    }
+    if (oldVersion < 9) {
+      await _createUsersTable(db);
     }
   }
 }

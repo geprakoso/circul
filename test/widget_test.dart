@@ -5,20 +5,109 @@ import 'package:circul/liked_post_repository.dart';
 import 'package:circul/main.dart';
 import 'package:circul/map/map_screen.dart';
 import 'package:circul/mock_data.dart';
+import 'package:circul/profile/editable_profile.dart';
 import 'package:circul/profile/profile_screen.dart';
 import 'package:circul/saved_post_repository.dart';
 import 'package:circul/search/search_screen.dart';
 import 'package:circul/shared/animated_like_icon.dart';
+import 'package:circul/user_repository.dart';
+import 'package:circul/welcome/welcome_flow.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('welcome wizard completes email verification path', (
+    tester,
+  ) async {
+    var completed = false;
+
+    await tester.pumpWidget(
+      MaterialApp(home: WelcomeFlow(onComplete: () => completed = true)),
+    );
+
+    expect(find.text('Welcome to Circul'), findsOneWidget);
+
+    await tester.tap(find.text('Start Check-in'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Login using Email'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Using email'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Verify'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose your username'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.pumpAndSettle();
+
+    expect(completed, isTrue);
+  });
+
+  testWidgets('welcome wizard completes whatsapp verification path', (
+    tester,
+  ) async {
+    var completed = false;
+
+    await tester.pumpWidget(
+      MaterialApp(home: WelcomeFlow(onComplete: () => completed = true)),
+    );
+
+    await tester.tap(find.text('Start Check-in'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Login using Email'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Whatsapp Number'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Input Phone Number'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Send Code'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Verify Code'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.pumpAndSettle();
+
+    expect(completed, isTrue);
+  });
+
+  testWidgets('profile debug menu opens welcome wizard', (tester) async {
+    await tester.pumpWidget(
+      CirculApp(
+        feedPostRepository: _FakeFeedPostRepository(),
+        userRepository: _FakeUserRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.bySemanticsLabel('Profil'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Menu profil'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Welcome wizard'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Circul'), findsOneWidget);
+  });
+
   testWidgets('renders Circul app shell and navigates primary tabs', (
     tester,
   ) async {
     await tester.pumpWidget(
-      CirculApp(feedPostRepository: _FakeFeedPostRepository()),
+      CirculApp(
+        feedPostRepository: _FakeFeedPostRepository(),
+        userRepository: _FakeUserRepository(),
+      ),
     );
     await tester.pump();
 
@@ -327,7 +416,10 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      CirculApp(feedPostRepository: _FakeFeedPostRepository()),
+      CirculApp(
+        feedPostRepository: _FakeFeedPostRepository(),
+        userRepository: _FakeUserRepository(),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -376,6 +468,7 @@ void main() {
             ),
             commentRepository: _FakeCommentRepository(),
             savedPostRepository: _FakeSavedPostRepository(),
+            userRepository: _FakeUserRepository(),
           ),
         ),
       ),
@@ -413,6 +506,10 @@ void main() {
   testWidgets('profile edit screen validates username and updates profile', (
     tester,
   ) async {
+    final userRepository = _FakeUserRepository(
+      takenUsernames: const {'ecofriend'},
+    );
+
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -434,6 +531,7 @@ void main() {
             ),
             commentRepository: _FakeCommentRepository(),
             savedPostRepository: _FakeSavedPostRepository(),
+            userRepository: userRepository,
           ),
         ),
       ),
@@ -481,6 +579,8 @@ void main() {
     expect(find.text('Belajar hidup minim sampah.'), findsOneWidget);
     expect(find.text('Solo, Indonesia'), findsOneWidget);
     expect(find.text('Profil diperbarui.'), findsOneWidget);
+    expect(userRepository.profile?.username, 'mayagreen');
+    expect(userRepository.profile?.name, 'Maya Green');
   });
 
   testWidgets('profile edits update own posts and check-ins', (tester) async {
@@ -504,6 +604,7 @@ void main() {
       CirculApp(
         feedPostRepository: _FakeFeedPostRepository(posts: [post]),
         likedPostRepository: _FakeLikedPostRepository(),
+        userRepository: _FakeUserRepository(),
       ),
     );
     await tester.pumpAndSettle();
@@ -568,6 +669,7 @@ void main() {
               ],
             ),
             savedPostRepository: _FakeSavedPostRepository(),
+            userRepository: _FakeUserRepository(),
           ),
         ),
       ),
@@ -763,6 +865,7 @@ void main() {
             commentRepository: _FakeCommentRepository(),
             savedPostRepository: savedRepository,
             likedPostRepository: likedRepository,
+            userRepository: _FakeUserRepository(),
           ),
         ),
       ),
@@ -851,6 +954,38 @@ void main() {
       findsOneWidget,
     );
   });
+}
+
+class _FakeUserRepository extends UserRepository {
+  _FakeUserRepository({
+    EditableProfile profile = UserRepository.defaultProfile,
+    Set<String> takenUsernames = const {},
+  }) : _profile = profile,
+       _takenUsernames = Set<String>.of(takenUsernames);
+
+  EditableProfile? get profile => _profile;
+
+  EditableProfile _profile;
+  final Set<String> _takenUsernames;
+
+  @override
+  Future<EditableProfile> getCurrentUserProfile() async => _profile;
+
+  @override
+  Future<Set<String>> getTakenUsernames({String excludingUserId = ''}) async {
+    return _takenUsernames
+        .where(
+          (username) =>
+              username.toLowerCase() != _profile.username.toLowerCase(),
+        )
+        .toSet();
+  }
+
+  @override
+  Future<void> saveCurrentUserProfile(EditableProfile profile) async {
+    _profile = profile;
+    _takenUsernames.add(profile.username);
+  }
 }
 
 class _FakeFeedPostRepository extends FeedPostRepository {

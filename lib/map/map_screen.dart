@@ -14,7 +14,7 @@ import '../check_in/capture_result_screen.dart';
 import '../comment_repository.dart';
 import '../feed_post_repository.dart';
 import '../mock_data.dart';
-import '../profile/edit_profile_screen.dart';
+import '../profile/editable_profile.dart';
 import '../shared/relative_timestamp.dart';
 
 const _gondangManisCenter = LatLng(-7.5584, 110.8199);

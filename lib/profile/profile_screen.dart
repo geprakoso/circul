@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../comment_repository.dart';
@@ -8,9 +9,11 @@ import '../feed_post_repository.dart';
 import '../home/widgets/feed_post_card.dart';
 import '../liked_post_repository.dart';
 import '../mock_data.dart';
-import 'edit_profile_screen.dart';
 import '../saved_post_repository.dart';
 import '../shared/shared_widgets.dart';
+import '../user_repository.dart';
+import 'edit_profile_screen.dart';
+import 'editable_profile.dart';
 import 'widgets/achievement_badge.dart';
 import 'widgets/profile_meta.dart';
 import 'widgets/profile_placeholder.dart';
@@ -31,8 +34,10 @@ class ProfileScreen extends StatefulWidget {
     this.commentRepository,
     this.savedPostRepository,
     this.likedPostRepository,
+    this.userRepository,
     this.onPostUpdated,
     this.onProfileUpdated,
+    this.onOpenWelcomeFlow,
     this.refreshToken = 0,
   });
 
@@ -41,8 +46,10 @@ class ProfileScreen extends StatefulWidget {
   final CommentRepository? commentRepository;
   final SavedPostRepository? savedPostRepository;
   final LikedPostRepository? likedPostRepository;
+  final UserRepository? userRepository;
   final VoidCallback? onPostUpdated;
   final ValueChanged<EditableProfile>? onProfileUpdated;
+  final VoidCallback? onOpenWelcomeFlow;
   final int refreshToken;
 
   @override
@@ -58,6 +65,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final CommentRepository _commentRepository;
   late final SavedPostRepository _savedPostRepository;
   late final LikedPostRepository _likedPostRepository;
+  late final UserRepository _userRepository;
   late Future<List<FeedPost>> _postsFuture;
   late Future<List<UserCommentResult>> _commentsFuture;
   late Future<List<FeedPost>> _savedPostsFuture;
@@ -69,6 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _commentRepository = widget.commentRepository ?? CommentRepository();
     _savedPostRepository = widget.savedPostRepository ?? SavedPostRepository();
     _likedPostRepository = widget.likedPostRepository ?? LikedPostRepository();
+    _userRepository = widget.userRepository ?? UserRepository();
     _postsFuture = _repository.getPosts();
     _commentsFuture = Future.value(const <UserCommentResult>[]);
     _savedPostsFuture = Future.value(const <FeedPost>[]);
@@ -150,9 +159,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _openEditProfile() async {
     final posts = await _postsFuture.catchError((_) => const <FeedPost>[]);
+    final takenUsernamesFromUsers = await _userRepository
+        .getTakenUsernames(excludingUserId: UserRepository.currentUserId)
+        .catchError((_) => const <String>{});
     if (!mounted) return;
 
     final takenUsernames = {
+      ...takenUsernamesFromUsers,
       for (final post in posts)
         if (post.author.toLowerCase() != _profile.username.toLowerCase() &&
             post.author.toLowerCase() != _profileAuthor)
@@ -169,9 +182,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (!mounted || updatedProfile == null) return;
 
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _userRepository.saveCurrentUserProfile(updatedProfile);
+    } catch (_) {
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Profil belum bisa disimpan.')),
+        );
+      return;
+    }
+
     setState(() => _profile = updatedProfile);
     widget.onProfileUpdated?.call(updatedProfile);
-    ScaffoldMessenger.of(context)
+    messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('Profil diperbarui.')));
   }
@@ -183,9 +209,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: ListView(
         padding: const EdgeInsets.only(bottom: 22),
         children: [
-          const CirculHeader(
+          CirculHeader(
             showChat: false,
-            primaryAction: _ProfileMenuButton(),
+            primaryAction: _ProfileMenuButton(
+              onOpenWelcomeFlow: widget.onOpenWelcomeFlow,
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
@@ -351,15 +379,44 @@ class _ProfileAvatar extends StatelessWidget {
   }
 }
 
+enum _ProfileMenuAction { welcomeWizard }
+
 class _ProfileMenuButton extends StatelessWidget {
-  const _ProfileMenuButton();
+  const _ProfileMenuButton({this.onOpenWelcomeFlow});
+
+  final VoidCallback? onOpenWelcomeFlow;
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
+    if (kReleaseMode || onOpenWelcomeFlow == null) {
+      return IconButton(
+        tooltip: 'Menu profil',
+        onPressed: () {},
+        icon: const _TwoLineMenuIcon(),
+      );
+    }
+
+    return PopupMenuButton<_ProfileMenuAction>(
       tooltip: 'Menu profil',
-      onPressed: () {},
       icon: const _TwoLineMenuIcon(),
+      onSelected: (action) {
+        switch (action) {
+          case _ProfileMenuAction.welcomeWizard:
+            onOpenWelcomeFlow?.call();
+        }
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: _ProfileMenuAction.welcomeWizard,
+          child: Row(
+            children: [
+              Icon(Icons.auto_awesome_motion_outlined, color: kCirculGreen),
+              SizedBox(width: 12),
+              Text('Welcome wizard'),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -9,7 +9,7 @@ import '../home/widgets/post_options_bottom_sheet.dart';
 import '../image_viewer/uploaded_image_fullscreen_page.dart';
 import '../liked_post_repository.dart';
 import '../mock_data.dart';
-import '../profile/edit_profile_screen.dart';
+import '../profile/editable_profile.dart';
 import '../saved_post_repository.dart';
 import '../shared/animated_like_icon.dart';
 import '../shared/relative_timestamp.dart';

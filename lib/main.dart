@@ -9,12 +9,14 @@ import 'home/home_screen.dart';
 import 'liked_post_repository.dart';
 import 'map/map_screen.dart';
 import 'mock_data.dart';
-import 'profile/edit_profile_screen.dart';
+import 'profile/editable_profile.dart';
 import 'profile/profile_screen.dart';
 import 'saved_post_repository.dart';
 import 'search/search_screen.dart';
 import 'shared/relative_timestamp.dart';
 import 'shared/sarah_avatar.dart';
+import 'user_repository.dart';
+import 'welcome/welcome_flow.dart';
 
 void main() {
   runApp(const CirculApp());
@@ -26,11 +28,13 @@ class CirculApp extends StatelessWidget {
     this.feedPostRepository,
     this.savedPostRepository,
     this.likedPostRepository,
+    this.userRepository,
   });
 
   final FeedPostRepository? feedPostRepository;
   final SavedPostRepository? savedPostRepository;
   final LikedPostRepository? likedPostRepository;
+  final UserRepository? userRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +59,7 @@ class CirculApp extends StatelessWidget {
         feedPostRepository: feedPostRepository,
         savedPostRepository: savedPostRepository,
         likedPostRepository: likedPostRepository,
+        userRepository: userRepository,
       ),
     );
   }
@@ -66,11 +71,13 @@ class CirculShell extends StatefulWidget {
     this.feedPostRepository,
     this.savedPostRepository,
     this.likedPostRepository,
+    this.userRepository,
   });
 
   final FeedPostRepository? feedPostRepository;
   final SavedPostRepository? savedPostRepository;
   final LikedPostRepository? likedPostRepository;
+  final UserRepository? userRepository;
 
   @override
   State<CirculShell> createState() => _CirculShellState();
@@ -82,15 +89,27 @@ class _CirculShellState extends State<CirculShell> {
   var _profileRefreshToken = 0;
   var _mapCurrentLocationRefreshToken = 0;
   var _searchResetToken = 0;
-  var _currentUserProfile = const EditableProfile(
-    name: 'Sarah Mae',
-    username: 'sarahmae',
-    bio:
-        'Berusaha hidup lebih berkelanjutan 🌿\nBelajar, berbagi, dan berdampak.',
-    location: 'Jakarta, Indonesia',
-  );
+  var _currentUserProfile = UserRepository.defaultProfile;
   MapFocusedCheckIn? _focusedCheckIn;
   final _issueClusters = <MapIssueCluster>[];
+  late final UserRepository _userRepository;
+
+  @override
+  void initState() {
+    super.initState();
+    _userRepository = widget.userRepository ?? UserRepository();
+    _loadCurrentUserProfile();
+  }
+
+  Future<void> _loadCurrentUserProfile() async {
+    try {
+      final profile = await _userRepository.getCurrentUserProfile();
+      if (!mounted) return;
+      setState(() => _currentUserProfile = profile);
+    } catch (_) {
+      // Keep the bundled profile if local persistence cannot be read yet.
+    }
+  }
 
   void _recordHeatmapLevel(LatLng point, {required bool showMap}) {
     setState(() {
@@ -249,8 +268,10 @@ class _CirculShellState extends State<CirculShell> {
         likedPostRepository: widget.likedPostRepository,
         onPostUpdated: _refreshPostConsumers,
         profile: _currentUserProfile,
+        userRepository: _userRepository,
         onProfileUpdated: _handleProfileUpdated,
         refreshToken: _profileRefreshToken,
+        onOpenWelcomeFlow: _openWelcomeFlow,
       ),
     ];
 
@@ -260,6 +281,15 @@ class _CirculShellState extends State<CirculShell> {
         selectedIndex: _index,
         onChanged: _handleTabChanged,
         currentUserProfile: _currentUserProfile,
+      ),
+    );
+  }
+
+  void _openWelcomeFlow() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            WelcomeFlow(onComplete: () => Navigator.of(routeContext).pop()),
       ),
     );
   }

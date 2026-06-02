@@ -5,7 +5,7 @@ import '../home/widgets/feed_post_card.dart';
 import '../liked_post_repository.dart';
 import '../mock_data.dart';
 import '../new_post/widgets/attachment_media_strip.dart';
-import '../profile/edit_profile_screen.dart';
+import '../profile/editable_profile.dart';
 
 class CommentScreen extends StatefulWidget {
   const CommentScreen({
