@@ -111,7 +111,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Circul'), findsOneWidget);
+    expect(find.bySemanticsLabel('Circul'), findsOneWidget);
     expect(find.bySemanticsLabel('Home'), findsOneWidget);
     expect(find.bySemanticsLabel('Peta'), findsOneWidget);
     expect(find.bySemanticsLabel('Cari'), findsOneWidget);

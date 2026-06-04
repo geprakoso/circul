@@ -163,12 +163,7 @@ class _WelcomeScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                const CirculLogo(size: 28),
-                const SizedBox(width: 8),
-                const Text(
-                  'Circul',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                ),
+                const CirculFullLogo(height: 30),
                 const Spacer(),
                 IconButton(
                   tooltip: 'Help',
@@ -242,17 +237,7 @@ class _LoginMethodScreen extends StatelessWidget {
         child: Column(
           children: [
             const Spacer(flex: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                CirculLogo(size: 42),
-                SizedBox(width: 12),
-                Text(
-                  'Circul',
-                  style: TextStyle(fontSize: 34, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
+            const CirculFullLogo(height: 52),
             const SizedBox(height: 22),
             const Text(
               'Join the movement to protect our natural\nspaces and build a cleaner future.',
@@ -540,7 +525,7 @@ class _OtpVerificationScreen extends StatelessWidget {
     return _WelcomeScaffold(
       header: isWhatsapp
           ? _BackHeader(onBack: onBack)
-          : _BackHeader(onBack: onBack, title: 'Circul', titleOnLeft: true),
+          : _BackLogoHeader(onBack: onBack),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -816,76 +801,58 @@ class _EntranceMotionState extends State<_EntranceMotion>
   }
 }
 
-class _BackHeader extends StatelessWidget {
-  const _BackHeader({
-    required this.onBack,
-    this.title,
-    this.titleOnLeft = false,
-  });
+class _BackLogoHeader extends StatelessWidget {
+  const _BackLogoHeader({required this.onBack});
 
   final VoidCallback onBack;
-  final String? title;
-  final bool titleOnLeft;
 
   @override
   Widget build(BuildContext context) {
-    final title = this.title;
-    if (titleOnLeft && title != null) {
-      return SizedBox(
-        height: 58,
-        child: Row(
-          children: [
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: 'Back',
-              onPressed: onBack,
-              icon: const Icon(
-                Icons.arrow_back_rounded,
-                color: Color(0xFF075734),
-                size: 26,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Color(0xFF075734),
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return SizedBox(
       height: 58,
-      child: Stack(
-        alignment: Alignment.center,
+      child: Row(
         children: [
-          Positioned(
-            left: 8,
-            child: IconButton(
-              tooltip: 'Back',
-              onPressed: onBack,
-              icon: const Icon(
-                Icons.arrow_back_rounded,
-                color: Color(0xFF075734),
-                size: 26,
-              ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Back',
+            onPressed: onBack,
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: Color(0xFF075734),
+              size: 26,
             ),
           ),
-          if (title != null)
-            Text(
-              title,
-              style: const TextStyle(
-                color: Color(0xFF075734),
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
+          const SizedBox(width: 12),
+          const CirculFullLogo(height: 28),
         ],
+      ),
+    );
+  }
+}
+
+class _BackHeader extends StatelessWidget {
+  const _BackHeader({required this.onBack});
+
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 58,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: IconButton(
+            tooltip: 'Back',
+            onPressed: onBack,
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              color: Color(0xFF075734),
+              size: 26,
+            ),
+          ),
+        ),
       ),
     );
   }

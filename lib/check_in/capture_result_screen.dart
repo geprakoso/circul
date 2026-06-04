@@ -107,13 +107,8 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
     }
   }
 
-  Future<void> _handleHeaderBack() async {
-    if (widget.useDummyCapture && Platform.isMacOS) {
-      Navigator.of(context).pop();
-      return;
-    }
-
-    await _retakePhoto();
+  void _handleHeaderBack() {
+    Navigator.of(context).pop(false);
   }
 
   Future<void> _loadCurrentLocation() async {

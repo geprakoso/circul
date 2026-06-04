@@ -80,7 +80,6 @@ class _MapScreenState extends State<MapScreen>
   var _isResolvingLocation = false;
   var _isSearchingLocation = false;
   var _isLoadingLocationSuggestions = false;
-  var _flagMenuExpanded = false;
   var _feedCheckIns = <FeedPost>[];
   var _locationSuggestions = <_MapLocationSuggestion>[];
   _VisibleCheckIn? _selectedCheckIn;
@@ -130,7 +129,6 @@ class _MapScreenState extends State<MapScreen>
         focusedCheckIn.id != oldWidget.focusedCheckIn?.id) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        setState(() => _flagMenuExpanded = false);
         _animateMapTo(
           focusedCheckIn.point,
           17,
@@ -301,13 +299,7 @@ class _MapScreenState extends State<MapScreen>
         Positioned(
           right: 16,
           bottom: showAnyMapSheet ? 252 : 84,
-          child: _FlagActionMenu(
-            expanded: _flagMenuExpanded,
-            onToggle: () =>
-                setState(() => _flagMenuExpanded = !_flagMenuExpanded),
-            onCheckIn: _openCaptureResult,
-            onCheckOut: () => _showLocationMessage('Check-out dipilih.'),
-          ),
+          child: _FlagCheckInButton(onTap: _openCaptureResult),
         ),
         if (showAnyMapSheet)
           Positioned.fill(
@@ -365,7 +357,6 @@ class _MapScreenState extends State<MapScreen>
       _isSearchingLocation = true;
       _isLoadingLocationSuggestions = false;
       _locationSuggestions = const [];
-      _flagMenuExpanded = false;
       _selectedCheckIn = null;
     });
 
@@ -454,7 +445,6 @@ class _MapScreenState extends State<MapScreen>
       _searchedLocationLabel = suggestion.title;
       _locationSuggestions = const [];
       _isLoadingLocationSuggestions = false;
-      _flagMenuExpanded = false;
       _selectedCheckIn = null;
     });
     _animateMapTo(suggestion.point, 17);
@@ -915,7 +905,6 @@ class _MapScreenState extends State<MapScreen>
   }
 
   Future<void> _openCaptureResult() async {
-    setState(() => _flagMenuExpanded = false);
     final didPost = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
         builder: (context) => CaptureResultScreen(
@@ -1536,154 +1525,40 @@ class _LocateButton extends StatelessWidget {
   }
 }
 
-class _FlagActionMenu extends StatelessWidget {
-  const _FlagActionMenu({
-    required this.expanded,
-    required this.onToggle,
-    required this.onCheckIn,
-    required this.onCheckOut,
-  });
+class _FlagCheckInButton extends StatelessWidget {
+  const _FlagCheckInButton({required this.onTap});
 
-  final bool expanded;
-  final VoidCallback onToggle;
-  final VoidCallback onCheckIn;
-  final VoidCallback onCheckOut;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    const buttonSize = 48.0;
-    const actionWidth = 106.0;
-    const expandedWidth = buttonSize + actionWidth * 2;
-    const animationDuration = Duration(milliseconds: 320);
-    const animationCurve = Curves.easeOutCubic;
-
     return Material(
       color: Colors.transparent,
-      child: AnimatedContainer(
-        duration: animationDuration,
-        curve: animationCurve,
-        width: expanded ? expandedWidth : buttonSize,
-        height: buttonSize,
-        decoration: BoxDecoration(
-          color: Colors.white,
+      child: Semantics(
+        button: true,
+        label: 'Buat check-in',
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x26000000),
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          alignment: Alignment.centerRight,
-          children: [
-            Positioned(
-              top: 0,
-              right: buttonSize,
-              bottom: 0,
-              width: actionWidth * 2,
-              child: IgnorePointer(
-                ignoring: !expanded,
-                child: ClipRect(
-                  child: AnimatedSlide(
-                    duration: animationDuration,
-                    curve: animationCurve,
-                    offset: expanded ? Offset.zero : const Offset(1, 0),
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 180),
-                      opacity: expanded ? 1 : 0,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          _FlagMenuAction(
-                            icon: Icons.arrow_downward_rounded,
-                            label: 'Check-in',
-                            color: const Color(0xFF8A1D2A),
-                            backgroundColor: const Color(0xFFFFF4F4),
-                            onPressed: onCheckIn,
-                          ),
-                          _FlagMenuAction(
-                            icon: Icons.arrow_upward_rounded,
-                            label: 'Check-out',
-                            color: const Color(0xFF0B5E35),
-                            backgroundColor: const Color(0xFFE8FCF6),
-                            onPressed: onCheckOut,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+          child: Ink(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x26000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 4),
                 ),
-              ),
+              ],
             ),
-            Semantics(
-              button: true,
-              label: expanded ? 'Tutup aksi check-in' : 'Buka aksi check-in',
-              child: InkWell(
-                onTap: onToggle,
-                child: AnimatedContainer(
-                  duration: animationDuration,
-                  curve: animationCurve,
-                  width: buttonSize,
-                  height: buttonSize,
-                  color: expanded ? const Color(0xFF3498F6) : Colors.white,
-                  child: Icon(
-                    Icons.flag_outlined,
-                    color: expanded ? Colors.white : const Color(0xFF777777),
-                    size: 25,
-                  ),
-                ),
-              ),
+            child: const Icon(
+              Icons.flag_outlined,
+              color: Color(0xFF777777),
+              size: 25,
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FlagMenuAction extends StatelessWidget {
-  const _FlagMenuAction({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.backgroundColor,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final Color backgroundColor;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onPressed,
-      child: Container(
-        width: 106,
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        color: backgroundColor,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: color, size: 19),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
           ),
         ),
       ),

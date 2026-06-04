@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/app_assets.dart';
 import '../core/constants.dart';
 import 'notification_icon.dart';
 
@@ -10,40 +11,31 @@ class CirculLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(size: Size.square(size), painter: _CirculLogoPainter());
+    return Image.asset(
+      AppAssets.circulLogoIcon,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      semanticLabel: 'Circul logo',
+    );
   }
 }
 
-class _CirculLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stroke = Paint()
-      ..color = kCirculGreen
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.22
-      ..strokeCap = StrokeCap.round;
-    final rect = Rect.fromLTWH(
-      size.width * 0.18,
-      size.height * 0.16,
-      size.width * 0.62,
-      size.height * 0.68,
-    );
-    canvas.drawArc(rect, 0.78, 4.95, false, stroke);
-    final dotPaint = Paint()..color = kCirculGreen;
-    canvas.drawCircle(
-      Offset(size.width * 0.78, size.height * 0.42),
-      size.width * 0.095,
-      dotPaint,
-    );
-    canvas.drawCircle(
-      Offset(size.width * 0.69, size.height * 0.66),
-      size.width * 0.07,
-      dotPaint,
-    );
-  }
+class CirculFullLogo extends StatelessWidget {
+  const CirculFullLogo({super.key, this.height = 38});
+
+  final double height;
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  Widget build(BuildContext context) {
+    return Image.asset(
+      AppAssets.circulFullLogo,
+      height: height,
+      width: height * 3.17,
+      fit: BoxFit.contain,
+      semanticLabel: 'Circul',
+    );
+  }
 }
 
 class CirculHeader extends StatelessWidget {
@@ -64,15 +56,19 @@ class CirculHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(22, 12, 22, 18),
       child: Row(
         children: [
-          const CirculLogo(size: 44),
-          const SizedBox(width: 12),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: kInk,
+          if (title == 'Circul')
+            const CirculFullLogo(height: 42)
+          else ...[
+            const CirculLogo(size: 44),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: kInk,
+              ),
             ),
-          ),
+          ],
           const Spacer(),
           primaryAction,
           if (showChat) ...[
