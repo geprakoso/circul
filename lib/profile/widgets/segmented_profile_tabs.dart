@@ -16,10 +16,10 @@ class SegmentedProfileTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabs = ['Postingan', 'Komentar', 'Disimpan'];
     return Container(
-      height: 46,
+      height: 40,
       decoration: BoxDecoration(
         color: const Color(0xFFF1F3F2),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
@@ -27,18 +27,18 @@ class SegmentedProfileTabs extends StatelessWidget {
             Expanded(
               child: InkWell(
                 onTap: () => onSelected(tab),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 child: Container(
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: selected == tab ? kSoftGreen : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     tab,
                     style: TextStyle(
                       color: selected == tab ? kCirculGreen : kMuted,
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
                   ),

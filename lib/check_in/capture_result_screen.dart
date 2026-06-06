@@ -38,7 +38,6 @@ class CaptureResultScreen extends StatefulWidget {
 }
 
 class _CaptureResultScreenState extends State<CaptureResultScreen> {
-  _ConditionChoice? _selectedChoice;
   late final ImagePicker _imagePicker;
   late String? _imagePath;
   late DateTime _capturedAt;
@@ -59,13 +58,6 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.imagePath != widget.imagePath) {
       _imagePath = widget.imagePath;
-    }
-  }
-
-  void _selectChoice(_ConditionChoice choice) {
-    setState(() => _selectedChoice = choice);
-    if (choice == _ConditionChoice.down) {
-      _openDownPostComposer();
     }
   }
 
@@ -360,8 +352,7 @@ class _CaptureResultScreenState extends State<CaptureResultScreen> {
                           onDone: () => Navigator.of(context).pop(true),
                         )
                       : _ConditionPanel(
-                          selectedChoice: _selectedChoice,
-                          onChoiceSelected: _selectChoice,
+                          onContinue: _openDownPostComposer,
                           onExamplesTap: () => _showPlaceholderMessage(
                             'Contoh kondisi akan dibuka.',
                           ),
@@ -750,13 +741,11 @@ class _CheckoutPanel extends StatelessWidget {
 
 class _ConditionPanel extends StatelessWidget {
   const _ConditionPanel({
-    required this.selectedChoice,
-    required this.onChoiceSelected,
+    required this.onContinue,
     required this.onExamplesTap,
   });
 
-  final _ConditionChoice? selectedChoice;
-  final ValueChanged<_ConditionChoice> onChoiceSelected;
+  final VoidCallback onContinue;
   final VoidCallback onExamplesTap;
 
   @override
@@ -795,7 +784,7 @@ class _ConditionPanel extends StatelessWidget {
             const _LeafBadge(),
             const SizedBox(height: 10),
             const Text(
-              'Is the environment\nup or down?',
+              'Continue your\ncheck-in?',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF083E23),
@@ -806,7 +795,7 @@ class _ConditionPanel extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             const Text(
-              'Your answer helps us understand\nthe condition of our environment.',
+              'Review your capture, then continue\nto finish your check-in post.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Color(0xFF4B5563),
@@ -816,25 +805,7 @@ class _ConditionPanel extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: _ConditionCard(
-                    choice: _ConditionChoice.up,
-                    selected: selectedChoice == _ConditionChoice.up,
-                    onTap: () => onChoiceSelected(_ConditionChoice.up),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _ConditionCard(
-                    choice: _ConditionChoice.down,
-                    selected: selectedChoice == _ConditionChoice.down,
-                    onTap: () => onChoiceSelected(_ConditionChoice.down),
-                  ),
-                ),
-              ],
-            ),
+            _ContinueCheckInButton(onTap: onContinue),
             const SizedBox(height: 18),
             _ExamplesButton(onTap: onExamplesTap),
           ],
@@ -861,83 +832,32 @@ class _LeafBadge extends StatelessWidget {
   }
 }
 
-class _ConditionCard extends StatelessWidget {
-  const _ConditionCard({
-    required this.choice,
-    required this.selected,
-    required this.onTap,
-  });
+class _ContinueCheckInButton extends StatelessWidget {
+  const _ContinueCheckInButton({required this.onTap});
 
-  final _ConditionChoice choice;
-  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final isUp = choice == _ConditionChoice.up;
-    final color = isUp ? const Color(0xFF23824D) : const Color(0xFFC24E4E);
-    final backgroundColor = isUp
-        ? const Color(0xFFF0FAF3)
-        : const Color(0xFFFEF5F4);
-    final borderColor = selected ? color : color.withValues(alpha: .12);
-    final title = isUp ? 'Up' : 'Down';
-    final subtitle = isUp ? 'Good condition' : 'Needs improvement';
-    final icon = isUp
-        ? Icons.sentiment_satisfied_alt_rounded
-        : Icons.sentiment_dissatisfied_rounded;
-
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: title,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          height: 112,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor, width: selected ? 2 : 1),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: .12),
-                      blurRadius: 12,
-                      offset: const Offset(0, 5),
-                    ),
-                  ]
-                : null,
+    return SizedBox(
+      width: double.infinity,
+      height: 44,
+      child: FilledButton.icon(
+        onPressed: onTap,
+        style: FilledButton.styleFrom(
+          backgroundColor: kCirculGreen,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
           ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: color, size: 40),
-                const SizedBox(height: 9),
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Color(0xFF4B5563),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+        ),
+        icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+        label: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            'Continue',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
           ),
         ),
       ),
@@ -1029,5 +949,3 @@ class _CaptureLocation {
   final LatLng? point;
   final String label;
 }
-
-enum _ConditionChoice { up, down }

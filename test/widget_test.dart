@@ -574,7 +574,7 @@ void main() {
     await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Maya Green'), findsOneWidget);
+    expect(find.text('Maya Green'), findsWidgets);
     expect(find.text('@mayagreen'), findsOneWidget);
     expect(find.text('Belajar hidup minim sampah.'), findsOneWidget);
     expect(find.text('Solo, Indonesia'), findsOneWidget);

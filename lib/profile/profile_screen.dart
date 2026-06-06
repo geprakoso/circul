@@ -207,7 +207,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return SafeArea(
       bottom: false,
       child: ListView(
-        padding: const EdgeInsets.only(bottom: 22),
+        padding: const EdgeInsets.only(bottom: 18),
         children: [
           CirculHeader(
             showChat: false,
@@ -216,12 +216,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _ProfileAvatar(profile: _profile, radius: 56),
-                const SizedBox(width: 18),
+                _ProfileAvatar(profile: _profile, radius: 44),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -230,28 +230,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _profile.name,
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
-                              fontSize: 22,
+                              fontSize: 19,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
                         '@${_profile.username}',
                         style: const TextStyle(
                           color: kMuted,
-                          fontSize: 15,
+                          fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Text(
                         _profile.bio,
-                        style: const TextStyle(fontSize: 15, height: 1.35),
+                        style: const TextStyle(fontSize: 13, height: 1.3),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       Wrap(
-                        spacing: 14,
-                        runSpacing: 8,
+                        spacing: 10,
+                        runSpacing: 6,
                         children: [
                           ProfileMeta(
                             icon: Icons.location_on_outlined,
@@ -263,17 +263,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       OutlinedButton.icon(
                         onPressed: _openEditProfile,
-                        icon: const Icon(Icons.edit_square),
+                        icon: const Icon(Icons.edit_square, size: 18),
                         label: const Text('Edit Profil'),
                         style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(44),
+                          minimumSize: const Size.fromHeight(38),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
                           foregroundColor: kInk,
                           side: const BorderSide(color: kLine),
+                          textStyle: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
                       ),
@@ -290,7 +295,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onAction: () {},
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -299,9 +304,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SegmentedProfileTabs(
               selected: _selectedTab,
               onSelected: _selectTab,
@@ -635,22 +640,22 @@ class _ProfileCommentResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const contentInset = 76.0;
+    const contentInset = 64.0;
 
     return Padding(
-      padding: const EdgeInsets.only(top: 26, bottom: 28),
+      padding: const EdgeInsets.only(top: 18, bottom: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _ProfileCommentRow(comment: result.comment),
           Padding(
-            padding: const EdgeInsets.only(left: contentInset, right: 20),
+            padding: const EdgeInsets.only(left: contentInset, right: 16),
             child: FeedPostCard(
               post: result.post,
               compact: true,
               framed: true,
               showActions: true,
-              framedMargin: const EdgeInsets.only(top: 22),
+              framedMargin: const EdgeInsets.only(top: 14),
               savedPostRepository: savedPostRepository,
               onPostSaved: onPostSaved,
               likedPostRepository: likedPostRepository,
@@ -753,23 +758,23 @@ class _ProfileCommentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(
-            radius: 28,
+            radius: 22,
             backgroundColor: comment.avatarColor,
             child: Text(
               comment.initials,
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w900,
-                fontSize: 22,
+                fontSize: 17,
               ),
             ),
           ),
-          const SizedBox(width: 20),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -783,7 +788,7 @@ class _ProfileCommentRow extends StatelessWidget {
                       comment.author,
                       style: const TextStyle(
                         color: Colors.black,
-                        fontSize: 20,
+                        fontSize: 15,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -792,18 +797,18 @@ class _ProfileCommentRow extends StatelessWidget {
                       comment.timeAgo,
                       style: const TextStyle(
                         color: kMuted,
-                        fontSize: 19,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
                 Text(
                   comment.body,
                   style: const TextStyle(
                     color: Colors.black,
-                    fontSize: 20,
+                    fontSize: 15,
                     height: 1.35,
                     fontWeight: FontWeight.w400,
                   ),
@@ -811,16 +816,16 @@ class _ProfileCommentRow extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           IconButton(
             tooltip: 'Sukai komentar',
             onPressed: () {},
             padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 42, minHeight: 42),
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
             icon: const Icon(
               Icons.favorite_border_rounded,
               color: kMuted,
-              size: 32,
+              size: 24,
             ),
           ),
         ],
@@ -854,21 +859,21 @@ class _ProfilePostMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 18, 20, 26),
-      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: kLine),
       ),
       child: Row(
         children: [
-          Icon(icon, color: kCirculGreen, size: 28),
-          const SizedBox(width: 14),
+          Icon(icon, color: kCirculGreen, size: 24),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
             ),
           ),
         ],

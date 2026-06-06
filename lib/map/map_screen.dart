@@ -18,12 +18,18 @@ import '../profile/editable_profile.dart';
 import '../shared/relative_timestamp.dart';
 
 const _gondangManisCenter = LatLng(-7.5584, 110.8199);
-const _osmTileTemplate = String.fromEnvironment(
-  'OSM_TILE_URL_TEMPLATE',
-  defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-);
-const _osmUserAgentPackageName = String.fromEnvironment(
-  'OSM_USER_AGENT_PACKAGE_NAME',
+// TODO(production): Move the Geoapify key to --dart-define/env config and
+// restrict the key in Geoapify before releasing public builds.
+const _defaultGeoapifyTileTemplate =
+    'https://maps.geoapify.com/v1/tile/carto/{z}/{x}/{y}.png?apiKey=4085f2be1bd8446197b7d0601b3a391f';
+const _mapTileTemplate = bool.hasEnvironment('MAP_TILE_URL_TEMPLATE')
+    ? String.fromEnvironment('MAP_TILE_URL_TEMPLATE')
+    : String.fromEnvironment(
+        'OSM_TILE_URL_TEMPLATE',
+        defaultValue: _defaultGeoapifyTileTemplate,
+      );
+const _appUserAgentPackageName = String.fromEnvironment(
+  'APP_USER_AGENT_PACKAGE_NAME',
   defaultValue: 'com.example.circul',
 );
 const _nominatimHost = 'nominatim.openstreetmap.org';
@@ -181,8 +187,8 @@ class _MapScreenState extends State<MapScreen>
           ),
           children: [
             TileLayer(
-              urlTemplate: _osmTileTemplate,
-              userAgentPackageName: _osmUserAgentPackageName,
+              urlTemplate: _mapTileTemplate,
+              userAgentPackageName: _appUserAgentPackageName,
               maxNativeZoom: 19,
             ),
             CircleLayer(circles: _clusterGlows(widget.issueClusters)),
@@ -261,6 +267,7 @@ class _MapScreenState extends State<MapScreen>
             const RichAttributionWidget(
               alignment: AttributionAlignment.bottomLeft,
               attributions: [
+                TextSourceAttribution('Powered by Geoapify'),
                 TextSourceAttribution('OpenStreetMap contributors'),
               ],
             ),
@@ -491,7 +498,7 @@ class _MapScreenState extends State<MapScreen>
         ..set(HttpHeaders.acceptHeader, 'application/json')
         ..set(
           HttpHeaders.userAgentHeader,
-          '$_osmUserAgentPackageName map-search',
+          '$_appUserAgentPackageName map-search',
         );
 
       final response = await request.close().timeout(
