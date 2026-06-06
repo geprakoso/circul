@@ -21,6 +21,7 @@ class FeedPostCard extends StatefulWidget {
     this.compact = false,
     this.framed = false,
     this.showActions = false,
+    this.showFrameBorder = true,
     this.framedMargin,
     this.savedPostRepository,
     this.onPostSaved,
@@ -37,6 +38,7 @@ class FeedPostCard extends StatefulWidget {
   final bool compact;
   final bool framed;
   final bool showActions;
+  final bool showFrameBorder;
   final EdgeInsetsGeometry? framedMargin;
   final SavedPostRepository? savedPostRepository;
   final VoidCallback? onPostSaved;
@@ -282,7 +284,7 @@ class _FeedPostCardState extends State<FeedPostCard> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kLine),
+        border: widget.showFrameBorder ? Border.all(color: kLine) : null,
       ),
       child: tappableContent,
     );

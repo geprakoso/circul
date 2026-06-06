@@ -12,6 +12,7 @@ import '../mock_data.dart';
 import '../saved_post_repository.dart';
 import '../shared/shared_widgets.dart';
 import '../user_repository.dart';
+import 'achievement_screen.dart';
 import 'edit_profile_screen.dart';
 import 'editable_profile.dart';
 import 'widgets/achievement_badge.dart';
@@ -202,6 +203,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ..showSnackBar(const SnackBar(content: Text('Profil diperbarui.')));
   }
 
+  void _openAchievements() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (context) => const AchievementScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -292,7 +299,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           SectionTitle(
             title: 'Achievement',
             action: 'Lihat semua',
-            onAction: () {},
+            onAction: _openAchievements,
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -525,6 +532,7 @@ class _ProfilePostsTab extends StatelessWidget {
                 post: posts[i],
                 compact: true,
                 framed: true,
+                showFrameBorder: false,
                 showActions: true,
                 savedPostRepository: savedPostRepository,
                 onPostSaved: onPostSaved,
@@ -654,6 +662,7 @@ class _ProfileCommentResultCard extends StatelessWidget {
               post: result.post,
               compact: true,
               framed: true,
+              showFrameBorder: false,
               showActions: true,
               framedMargin: const EdgeInsets.only(top: 14),
               savedPostRepository: savedPostRepository,
@@ -725,6 +734,7 @@ class _ProfileSavedPostsTab extends StatelessWidget {
                 post: posts[i],
                 compact: true,
                 framed: true,
+                showFrameBorder: false,
                 showActions: true,
                 savedPostRepository: savedPostRepository,
                 onPostSaved: onSavedPostDeleted,
