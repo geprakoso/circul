@@ -135,6 +135,76 @@ void main() {
     },
   );
 
+  testWidgets(
+    'username recommendations appear when database username is taken',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WelcomeFlow(
+            authService: WelcomeAuthRepositoryAdapter(
+              _FakeAuthRepository(
+                authenticated: false,
+                takenUsernames: const {'maya'},
+              ),
+            ),
+            onComplete: () {},
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Start Check-in'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(TextButton));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'name@example.com'),
+        'maya@example.com',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Jane Doe'),
+        'Maya',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField), 'Password1');
+      await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pick Our Recommendation'), findsNothing);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, '@ username'),
+        'may',
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+
+      expect(find.text('username available'), findsOneWidget);
+      expect(find.text('username unavailable'), findsNothing);
+      expect(find.text('Pick Our Recommendation'), findsNothing);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, '@ username'),
+        'maya',
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(find.text('username unavailable'), findsOneWidget);
+      expect(find.text('username available'), findsNothing);
+      expect(find.text('Pick Our Recommendation'), findsOneWidget);
+      expect(find.text('maya01'), findsOneWidget);
+
+      await tester.tap(find.text('maya01'));
+      await tester.pump();
+
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'maya01',
+      );
+    },
+  );
+
   testWidgets('welcome wizard completes email login path', (tester) async {
     var completed = false;
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../auth/auth_repository.dart';
@@ -176,7 +178,13 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
   var _step = _WelcomeStep.welcome;
   var _transitionDirection = 1;
   var _isSubmitting = false;
+  var _isCheckingUsername = false;
+  var _isUsernameTaken = false;
+  var _hasCheckedUsername = false;
+  var _usernameLookupId = 0;
   String? _errorMessage;
+  Timer? _usernameCheckTimer;
+  List<String> _usernameSuggestions = const [];
   final _history = <_WelcomeStep>[];
   final _loginEmailController = TextEditingController();
   final _loginPasswordController = TextEditingController();
@@ -186,7 +194,15 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
   final _usernameController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _usernameController.addListener(_queueUsernameAvailabilityCheck);
+  }
+
+  @override
   void dispose() {
+    _usernameCheckTimer?.cancel();
+    _usernameController.removeListener(_queueUsernameAvailabilityCheck);
     _loginEmailController.dispose();
     _loginPasswordController.dispose();
     _emailController.dispose();
@@ -272,11 +288,8 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
   }
 
   Future<void> _submitSignUp() async {
-    final username = _usernameController.text.trim().replaceFirst(
-      RegExp(r'^@+'),
-      '',
-    );
-    if (!RegExp(r'^[a-zA-Z0-9._]{3,24}$').hasMatch(username)) {
+    final username = _cleanUsername(_usernameController.text);
+    if (!_isValidUsernameFormat(username)) {
       setState(
         () => _errorMessage =
             'Username 3-24 karakter: huruf, angka, titik, atau underscore.',
@@ -297,6 +310,82 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
       );
       widget.onComplete();
     });
+  }
+
+  void _queueUsernameAvailabilityCheck() {
+    _usernameCheckTimer?.cancel();
+    final lookupId = ++_usernameLookupId;
+    final username = _cleanUsername(_usernameController.text);
+
+    if (!_isValidUsernameFormat(username)) {
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameTaken = false;
+        _hasCheckedUsername = false;
+        _usernameSuggestions = const [];
+      });
+      return;
+    }
+
+    setState(() {
+      _isCheckingUsername = true;
+      _isUsernameTaken = false;
+      _hasCheckedUsername = false;
+      _usernameSuggestions = const [];
+    });
+
+    _usernameCheckTimer = Timer(const Duration(milliseconds: 350), () {
+      _checkUsernameAvailability(username, lookupId);
+    });
+  }
+
+  Future<void> _checkUsernameAvailability(String username, int lookupId) async {
+    try {
+      final isTaken = await widget.authService.isUsernameTaken(username);
+      if (!mounted || lookupId != _usernameLookupId) return;
+
+      if (!isTaken) {
+        setState(() {
+          _isCheckingUsername = false;
+          _isUsernameTaken = false;
+          _hasCheckedUsername = true;
+          _usernameSuggestions = const [];
+        });
+        return;
+      }
+
+      final suggestions = <String>[];
+      for (final suggestion in _candidateUsernameSuggestions(username)) {
+        final suggestionTaken = await widget.authService.isUsernameTaken(
+          suggestion,
+        );
+        if (!mounted || lookupId != _usernameLookupId) return;
+        if (!suggestionTaken) suggestions.add(suggestion);
+        if (suggestions.length == 4) break;
+      }
+
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameTaken = true;
+        _hasCheckedUsername = true;
+        _usernameSuggestions = suggestions;
+      });
+    } catch (error) {
+      if (!mounted || lookupId != _usernameLookupId) return;
+      setState(() {
+        _isCheckingUsername = false;
+        _isUsernameTaken = false;
+        _hasCheckedUsername = false;
+        _usernameSuggestions = const [];
+      });
+    }
+  }
+
+  void _selectUsernameSuggestion(String suggestion) {
+    _usernameController.text = suggestion;
+    _usernameController.selection = TextSelection.collapsed(
+      offset: suggestion.length,
+    );
   }
 
   Future<void> _submit(Future<void> Function() action) async {
@@ -320,6 +409,32 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
     if (!_isValidEmail(email)) return 'Masukkan email yang valid.';
     if (password.isEmpty) return 'Password wajib diisi.';
     return null;
+  }
+
+  String _cleanUsername(String value) {
+    return value.trim().replaceFirst(RegExp(r'^@+'), '');
+  }
+
+  bool _isValidUsernameFormat(String username) {
+    return RegExp(r'^[a-zA-Z0-9._]{3,24}$').hasMatch(username);
+  }
+
+  List<String> _candidateUsernameSuggestions(String username) {
+    final cleanBase = username.replaceAll(RegExp(r'[^a-zA-Z0-9._]'), '');
+    final base = cleanBase.isEmpty ? 'circul' : cleanBase;
+    const suffixes = ['01', '08', '20', '24', '_id', '.id', '_go', '.go'];
+    final suggestions = <String>[];
+
+    for (final suffix in suffixes) {
+      final maxBaseLength = 24 - suffix.length;
+      final trimmedBase = base.length > maxBaseLength
+          ? base.substring(0, maxBaseLength)
+          : base;
+      final suggestion = '$trimmedBase$suffix';
+      if (_isValidUsernameFormat(suggestion)) suggestions.add(suggestion);
+    }
+
+    return suggestions.toSet().toList(growable: false);
   }
 
   bool _isValidEmail(String email) {
@@ -388,6 +503,11 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
         usernameController: _usernameController,
         onContinue: _submitSignUp,
         isLoading: _isSubmitting,
+        isCheckingUsername: _isCheckingUsername,
+        isUsernameTaken: _isUsernameTaken,
+        hasCheckedUsername: _hasCheckedUsername,
+        usernameSuggestions: _usernameSuggestions,
+        onSuggestionSelected: _selectUsernameSuggestion,
         errorMessage: _errorMessage,
       ),
     };
@@ -1058,6 +1178,11 @@ class _UsernameScreen extends StatelessWidget {
     required this.usernameController,
     required this.onContinue,
     required this.isLoading,
+    required this.isCheckingUsername,
+    required this.isUsernameTaken,
+    required this.hasCheckedUsername,
+    required this.usernameSuggestions,
+    required this.onSuggestionSelected,
     this.errorMessage,
   });
 
@@ -1065,6 +1190,11 @@ class _UsernameScreen extends StatelessWidget {
   final TextEditingController usernameController;
   final VoidCallback onContinue;
   final bool isLoading;
+  final bool isCheckingUsername;
+  final bool isUsernameTaken;
+  final bool hasCheckedUsername;
+  final List<String> usernameSuggestions;
+  final ValueChanged<String> onSuggestionSelected;
   final String? errorMessage;
 
   @override
@@ -1083,12 +1213,32 @@ class _UsernameScreen extends StatelessWidget {
             ),
             const SizedBox(height: 36),
             _PlainInput(hint: '@ username', controller: usernameController),
+            if (isCheckingUsername) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Checking username...',
+                style: TextStyle(
+                  color: Color(0xFF59635E),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            if (hasCheckedUsername && !isCheckingUsername) ...[
+              const SizedBox(height: 14),
+              _UsernameAvailabilityNote(isAvailable: !isUsernameTaken),
+            ],
             if (errorMessage != null) ...[
               const SizedBox(height: 14),
               _WelcomeErrorText(errorMessage!),
             ],
-            const SizedBox(height: 20),
-            const _UsernameSuggestions(),
+            if (isUsernameTaken) ...[
+              const SizedBox(height: 20),
+              _UsernameSuggestions(
+                suggestions: usernameSuggestions,
+                onSelected: onSuggestionSelected,
+              ),
+            ],
           ],
         ),
       ),
@@ -1881,12 +2031,16 @@ class _OtpBoxes extends StatelessWidget {
 }
 
 class _UsernameSuggestions extends StatelessWidget {
-  const _UsernameSuggestions();
+  const _UsernameSuggestions({
+    required this.suggestions,
+    required this.onSelected,
+  });
+
+  final List<String> suggestions;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
-    const suggestions = ['haxsa08', 'haxsaa', 'haxsa20', 'haxsaaa'];
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
@@ -1899,26 +2053,82 @@ class _UsernameSuggestions extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Pick Our Recomendation',
+            'Pick Our Recommendation',
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 18),
-          for (final suggestion in suggestions) ...[
-            Row(
-              children: [
-                const Icon(
-                  Icons.check_circle_rounded,
-                  color: kCirculGreen,
-                  size: 19,
+          if (suggestions.isEmpty)
+            const Text(
+              'No available recommendation yet.',
+              style: TextStyle(color: Color(0xFF59635E), fontSize: 14),
+            )
+          else
+            for (final suggestion in suggestions) ...[
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => onSelected(suggestion),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: kCirculGreen,
+                          size: 19,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            suggestion,
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Color(0xFF59635E),
+                          size: 18,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 14),
-                Text(suggestion, style: const TextStyle(fontSize: 14)),
-              ],
-            ),
-            if (suggestion != suggestions.last) const SizedBox(height: 16),
-          ],
+              ),
+              if (suggestion != suggestions.last) const SizedBox(height: 12),
+            ],
         ],
       ),
+    );
+  }
+}
+
+class _UsernameAvailabilityNote extends StatelessWidget {
+  const _UsernameAvailabilityNote({required this.isAvailable});
+
+  final bool isAvailable;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isAvailable ? kCirculGreen : const Color(0xFFE5484D);
+    final icon = isAvailable
+        ? Icons.check_circle_rounded
+        : Icons.cancel_rounded;
+    final text = isAvailable ? 'username available' : 'username unavailable';
+
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 19),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 }
