@@ -43,6 +43,7 @@ dependencies:
   geocoding: ^4.0.0
   lottie: ^3.3.2
   fuzzy_search_engine: ^1.1.0
+  supabase_flutter: ^2.14.1
 
 dev_dependencies:
   flutter_test:

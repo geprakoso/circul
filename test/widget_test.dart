@@ -1,4 +1,5 @@
 import 'package:circul/comment_repository.dart';
+import 'package:circul/auth/auth_repository.dart';
 import 'package:circul/feed_post_repository.dart';
 import 'package:circul/home/widgets/feed_post_card.dart';
 import 'package:circul/liked_post_repository.dart';
@@ -17,9 +18,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('welcome wizard completes email verification path', (
-    tester,
-  ) async {
+  testWidgets('welcome wizard completes email sign-up path', (tester) async {
     var completed = false;
 
     await tester.pumpWidget(
@@ -30,28 +29,113 @@ void main() {
 
     await tester.tap(find.text('Start Check-in'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Login using Email'));
+    await tester.tap(find.byType(TextButton));
     await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'name@example.com'),
+      'maya@example.com',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'Jane Doe'), 'Maya');
     await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Using email'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Verify'));
-    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'Password1');
     await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
     await tester.pumpAndSettle();
 
     expect(find.text('Choose your username'), findsOneWidget);
 
+    await tester.enterText(
+      find.widgetWithText(TextField, '@ username'),
+      'maya',
+    );
     await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
 
     expect(completed, isTrue);
   });
 
-  testWidgets('welcome wizard completes whatsapp verification path', (
-    tester,
-  ) async {
+  testWidgets(
+    'welcome password screen enforces requirements and updates meter',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(home: WelcomeFlow(onComplete: () {})),
+      );
+
+      await tester.tap(find.text('Start Check-in'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(TextButton));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'name@example.com'),
+        'maya@example.com',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Jane Doe'),
+        'Maya',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('WEAK'), findsOneWidget);
+      expect(find.text('0% Secure'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextFormField), 'password123');
+      await tester.pump();
+
+      expect(find.text('GOOD'), findsOneWidget);
+      expect(find.text('60% Secure'), findsOneWidget);
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                of: find.byType(TextFormField),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .obscureText,
+        isTrue,
+      );
+
+      await tester.tap(find.byTooltip('Show password'));
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                of: find.byType(TextFormField),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .obscureText,
+        isFalse,
+      );
+      expect(find.byTooltip('Hide password'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Create a password'), findsOneWidget);
+      expect(
+        find.text('Password harus memenuhi semua security requirements wajib.'),
+        findsOneWidget,
+      );
+      expect(find.text('Choose your username'), findsNothing);
+
+      await tester.enterText(find.byType(TextFormField), 'Password1');
+      await tester.pump();
+
+      expect(find.text('STRONG'), findsOneWidget);
+      expect(find.text('90% Secure'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Choose your username'), findsOneWidget);
+    },
+  );
+
+  testWidgets('welcome wizard completes email login path', (tester) async {
     var completed = false;
 
     await tester.pumpWidget(
@@ -62,28 +146,92 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Login using Email'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Whatsapp Number'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Input Phone Number'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(FilledButton, 'Send Code'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Verify Code'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.enterText(
+      find.widgetWithText(TextField, 'name@example.com'),
+      'sarah@example.com',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Password'),
+      'password123',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Login'));
     await tester.pumpAndSettle();
 
     expect(completed, isTrue);
   });
 
+  testWidgets('unauthenticated app launch shows welcome flow', (tester) async {
+    await tester.pumpWidget(
+      CirculApp(
+        authRepository: _FakeAuthRepository(authenticated: false),
+        feedPostRepository: _FakeFeedPostRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Circul'), findsOneWidget);
+    expect(find.bySemanticsLabel('Home'), findsNothing);
+  });
+
+  testWidgets('email sign-up enters shell and loads profile', (tester) async {
+    final authRepository = _FakeAuthRepository(authenticated: false);
+
+    await tester.pumpWidget(
+      CirculApp(
+        authRepository: authRepository,
+        feedPostRepository: _FakeFeedPostRepository(),
+        userRepository: _FakeRemoteUserRepository(authRepository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Start Check-in'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextButton));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'name@example.com'),
+      'maya@example.com',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'Jane Doe'), 'Maya');
+    await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'Password1');
+    await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, '@ username'),
+      'maya',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Home'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('Profil'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Maya'), findsWidgets);
+    expect(find.text('@maya'), findsOneWidget);
+  });
+
+  testWidgets('existing auth session skips welcome flow', (tester) async {
+    await tester.pumpWidget(
+      CirculApp(
+        authRepository: _FakeAuthRepository(authenticated: true),
+        feedPostRepository: _FakeFeedPostRepository(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Welcome to Circul'), findsNothing);
+    expect(find.bySemanticsLabel('Home'), findsOneWidget);
+  });
+
   testWidgets('profile debug menu opens welcome wizard', (tester) async {
     await tester.pumpWidget(
       CirculApp(
+        authRepository: _FakeAuthRepository(authenticated: true),
         feedPostRepository: _FakeFeedPostRepository(),
         userRepository: _FakeUserRepository(),
       ),
@@ -105,6 +253,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       CirculApp(
+        authRepository: _FakeAuthRepository(authenticated: true),
         feedPostRepository: _FakeFeedPostRepository(),
         userRepository: _FakeUserRepository(),
       ),
@@ -417,6 +566,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       CirculApp(
+        authRepository: _FakeAuthRepository(authenticated: true),
         feedPostRepository: _FakeFeedPostRepository(),
         userRepository: _FakeUserRepository(),
       ),
@@ -602,6 +752,7 @@ void main() {
 
     await tester.pumpWidget(
       CirculApp(
+        authRepository: _FakeAuthRepository(authenticated: true),
         feedPostRepository: _FakeFeedPostRepository(posts: [post]),
         likedPostRepository: _FakeLikedPostRepository(),
         userRepository: _FakeUserRepository(),
@@ -985,6 +1136,105 @@ class _FakeUserRepository extends UserRepository {
   Future<void> saveCurrentUserProfile(EditableProfile profile) async {
     _profile = profile;
     _takenUsernames.add(profile.username);
+  }
+}
+
+class _FakeAuthRepository implements AuthRepository {
+  _FakeAuthRepository({
+    required bool authenticated,
+    EditableProfile profile = UserRepository.defaultProfile,
+    Set<String> takenUsernames = const {},
+  }) : _authenticated = authenticated,
+       _profile = profile,
+       _takenUsernames = Set<String>.of(takenUsernames)..add(profile.username);
+
+  bool _authenticated;
+  EditableProfile _profile;
+  final Set<String> _takenUsernames;
+
+  @override
+  String? get currentUserId => _authenticated ? 'fake-user-id' : null;
+
+  @override
+  bool get hasActiveSession => _authenticated;
+
+  @override
+  Future<EditableProfile?> fetchCurrentProfile() async {
+    return _authenticated ? _profile : null;
+  }
+
+  @override
+  Future<Set<String>> fetchTakenUsernames({String excludingUserId = ''}) async {
+    return _takenUsernames;
+  }
+
+  @override
+  Future<void> saveCurrentProfile(EditableProfile profile) async {
+    _profile = profile;
+    _takenUsernames.add(profile.username);
+  }
+
+  @override
+  Future<EditableProfile> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    _authenticated = true;
+    return _profile;
+  }
+
+  @override
+  Future<EditableProfile> signUpWithEmail({
+    required String email,
+    required String password,
+    required String name,
+    required String username,
+  }) async {
+    final cleanUsername = username.trim().replaceFirst(RegExp(r'^@+'), '');
+    if (_takenUsernames.any(
+      (value) => value.toLowerCase() == cleanUsername.toLowerCase(),
+    )) {
+      throw const AuthFailure('Username sudah dipakai.');
+    }
+
+    _authenticated = true;
+    _profile = EditableProfile(
+      name: name.trim(),
+      username: cleanUsername,
+      bio: '',
+      location: '',
+    );
+    _takenUsernames.add(cleanUsername);
+    return _profile;
+  }
+
+  @override
+  Future<void> signOut() async {
+    _authenticated = false;
+  }
+}
+
+class _FakeRemoteUserRepository extends UserRepository {
+  _FakeRemoteUserRepository(this._authRepository);
+
+  final _FakeAuthRepository _authRepository;
+
+  @override
+  Future<EditableProfile> getCurrentUserProfile() async {
+    return await _authRepository.fetchCurrentProfile() ??
+        UserRepository.defaultProfile;
+  }
+
+  @override
+  Future<Set<String>> getTakenUsernames({String excludingUserId = ''}) {
+    return _authRepository.fetchTakenUsernames(
+      excludingUserId: excludingUserId,
+    );
+  }
+
+  @override
+  Future<void> saveCurrentUserProfile(EditableProfile profile) {
+    return _authRepository.saveCurrentProfile(profile);
   }
 }
 

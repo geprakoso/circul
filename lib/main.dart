@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'auth/auth_repository.dart';
+import 'auth/supabase_auth_repository.dart';
 import 'event/event_screen.dart';
 import 'feed_post_repository.dart';
 import 'home/home_screen.dart';
@@ -18,19 +20,24 @@ import 'shared/sarah_avatar.dart';
 import 'user_repository.dart';
 import 'welcome/welcome_flow.dart';
 
-void main() {
-  runApp(const CirculApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final authRepository =
+      await SupabaseAuthRepository.initializeFromEnvironment();
+  runApp(CirculApp(authRepository: authRepository));
 }
 
 class CirculApp extends StatelessWidget {
   const CirculApp({
     super.key,
+    this.authRepository,
     this.feedPostRepository,
     this.savedPostRepository,
     this.likedPostRepository,
     this.userRepository,
   });
 
+  final AuthRepository? authRepository;
   final FeedPostRepository? feedPostRepository;
   final SavedPostRepository? savedPostRepository;
   final LikedPostRepository? likedPostRepository;
@@ -55,7 +62,8 @@ class CirculApp extends StatelessWidget {
           fontFamily: 'SF Pro Display',
         ),
       ),
-      home: CirculShell(
+      home: _AuthGate(
+        authRepository: authRepository,
         feedPostRepository: feedPostRepository,
         savedPostRepository: savedPostRepository,
         likedPostRepository: likedPostRepository,
@@ -65,15 +73,67 @@ class CirculApp extends StatelessWidget {
   }
 }
 
-class CirculShell extends StatefulWidget {
-  const CirculShell({
-    super.key,
+class _AuthGate extends StatefulWidget {
+  const _AuthGate({
+    required this.authRepository,
     this.feedPostRepository,
     this.savedPostRepository,
     this.likedPostRepository,
     this.userRepository,
   });
 
+  final AuthRepository? authRepository;
+  final FeedPostRepository? feedPostRepository;
+  final SavedPostRepository? savedPostRepository;
+  final LikedPostRepository? likedPostRepository;
+  final UserRepository? userRepository;
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  late var _isAuthenticated = widget.authRepository?.hasActiveSession ?? false;
+
+  void _handleAuthComplete() {
+    setState(() {
+      _isAuthenticated = widget.authRepository?.hasActiveSession ?? true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authRepository = widget.authRepository;
+    if (!_isAuthenticated) {
+      return WelcomeFlow(
+        authService: authRepository == null
+            ? const UnavailableWelcomeAuthService()
+            : WelcomeAuthRepositoryAdapter(authRepository),
+        onComplete: _handleAuthComplete,
+      );
+    }
+
+    return CirculShell(
+      authRepository: authRepository,
+      feedPostRepository: widget.feedPostRepository,
+      savedPostRepository: widget.savedPostRepository,
+      likedPostRepository: widget.likedPostRepository,
+      userRepository: widget.userRepository,
+    );
+  }
+}
+
+class CirculShell extends StatefulWidget {
+  const CirculShell({
+    super.key,
+    this.authRepository,
+    this.feedPostRepository,
+    this.savedPostRepository,
+    this.likedPostRepository,
+    this.userRepository,
+  });
+
+  final AuthRepository? authRepository;
   final FeedPostRepository? feedPostRepository;
   final SavedPostRepository? savedPostRepository;
   final LikedPostRepository? likedPostRepository;
@@ -97,7 +157,9 @@ class _CirculShellState extends State<CirculShell> {
   @override
   void initState() {
     super.initState();
-    _userRepository = widget.userRepository ?? UserRepository();
+    _userRepository =
+        widget.userRepository ??
+        UserRepository(remoteProfileDataSource: widget.authRepository);
     _loadCurrentUserProfile();
   }
 
@@ -288,8 +350,15 @@ class _CirculShellState extends State<CirculShell> {
   void _openWelcomeFlow() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (routeContext) =>
-            WelcomeFlow(onComplete: () => Navigator.of(routeContext).pop()),
+        builder: (routeContext) => WelcomeFlow(
+          authService: widget.authRepository == null
+              ? const PlaceholderWelcomeAuthService()
+              : WelcomeAuthRepositoryAdapter(widget.authRepository!),
+          onComplete: () {
+            Navigator.of(routeContext).pop();
+            _loadCurrentUserProfile();
+          },
+        ),
       ),
     );
   }

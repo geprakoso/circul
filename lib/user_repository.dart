@@ -1,11 +1,15 @@
 import 'package:sqflite/sqflite.dart';
 
+import 'auth/profile_remote_data_source.dart';
 import 'local_database.dart';
 import 'profile/editable_profile.dart';
 
 class UserRepository {
-  UserRepository({CirculDatabase? database})
-    : _database = database ?? CirculDatabase.instance;
+  UserRepository({
+    CirculDatabase? database,
+    ProfileRemoteDataSource? remoteProfileDataSource,
+  }) : _database = database ?? CirculDatabase.instance,
+       _remoteProfileDataSource = remoteProfileDataSource;
 
   static const currentUserId = 'current_user';
   static const defaultProfile = EditableProfile(
@@ -17,10 +21,27 @@ class UserRepository {
   );
 
   final CirculDatabase _database;
+  final ProfileRemoteDataSource? _remoteProfileDataSource;
 
   Future<EditableProfile> getCurrentUserProfile() async {
+    final remote = _remoteProfileDataSource;
+    if (remote?.currentUserId != null) {
+      try {
+        final profile = await remote!.fetchCurrentProfile();
+        if (profile != null) {
+          await _saveLocalCurrentUserProfile(
+            profile,
+            id: remote.currentUserId ?? currentUserId,
+            syncStatus: 'synced',
+          );
+          return profile;
+        }
+      } catch (_) {
+        // Fall back to the local cache if the network request fails.
+      }
+    }
+
     final db = await _database.database;
-    await _seedCurrentUserIfNeeded(db);
 
     final rows = await db.query(
       CirculDatabase.usersTable,
@@ -34,6 +55,19 @@ class UserRepository {
   }
 
   Future<Set<String>> getTakenUsernames({String excludingUserId = ''}) async {
+    final remote = _remoteProfileDataSource;
+    if (remote?.currentUserId != null) {
+      try {
+        return await remote!.fetchTakenUsernames(
+          excludingUserId: excludingUserId == currentUserId
+              ? remote.currentUserId ?? excludingUserId
+              : excludingUserId,
+        );
+      } catch (_) {
+        // Local data is good enough for validation while offline.
+      }
+    }
+
     final db = await _database.database;
     await _seedCurrentUserIfNeeded(db);
 
@@ -48,40 +82,59 @@ class UserRepository {
   }
 
   Future<void> saveCurrentUserProfile(EditableProfile profile) async {
+    final cleanProfile = _cleanProfile(profile);
+    final remote = _remoteProfileDataSource;
+    if (remote?.currentUserId != null) {
+      await remote!.saveCurrentProfile(cleanProfile);
+      await _saveLocalCurrentUserProfile(
+        cleanProfile,
+        id: remote.currentUserId ?? currentUserId,
+        syncStatus: 'synced',
+      );
+      return;
+    }
+
+    await _saveLocalCurrentUserProfile(cleanProfile);
+  }
+
+  Future<void> _saveLocalCurrentUserProfile(
+    EditableProfile profile, {
+    String id = currentUserId,
+    String syncStatus = 'local',
+  }) async {
     final db = await _database.database;
     final now = DateTime.now().millisecondsSinceEpoch;
-    final cleanProfile = _cleanProfile(profile);
 
     await db.transaction((txn) async {
       await txn.update(
         CirculDatabase.usersTable,
         {'is_current': 0, 'updated_at': now},
         where: 'id != ? AND is_current = 1',
-        whereArgs: [currentUserId],
+        whereArgs: [id],
       );
 
       final existing = await txn.query(
         CirculDatabase.usersTable,
         columns: const ['id'],
         where: 'id = ?',
-        whereArgs: [currentUserId],
+        whereArgs: [id],
         limit: 1,
       );
 
       final values = {
-        'name': cleanProfile.name,
-        'username': cleanProfile.username,
-        'bio': cleanProfile.bio,
-        'location': cleanProfile.location,
-        'image_path': cleanProfile.imagePath,
+        'name': profile.name,
+        'username': profile.username,
+        'bio': profile.bio,
+        'location': profile.location,
+        'image_path': profile.imagePath,
         'is_current': 1,
-        'sync_status': 'local',
+        'sync_status': syncStatus,
         'updated_at': now,
       };
 
       if (existing.isEmpty) {
         await txn.insert(CirculDatabase.usersTable, {
-          'id': currentUserId,
+          'id': id,
           ...values,
           'created_at': now,
         }, conflictAlgorithm: ConflictAlgorithm.abort);
@@ -90,7 +143,7 @@ class UserRepository {
           CirculDatabase.usersTable,
           values,
           where: 'id = ?',
-          whereArgs: [currentUserId],
+          whereArgs: [id],
           conflictAlgorithm: ConflictAlgorithm.abort,
         );
       }

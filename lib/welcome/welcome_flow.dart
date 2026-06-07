@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../auth/auth_repository.dart';
 import '../core/constants.dart';
+import '../profile/editable_profile.dart';
 import '../shared/circul_header.dart';
 
 enum WelcomeAuthProvider { google, apple }
@@ -9,6 +11,20 @@ enum WelcomeAuthOutcome { existingAccount, needsAccount }
 
 abstract class WelcomeAuthService {
   Future<WelcomeAuthOutcome> continueWithProvider(WelcomeAuthProvider provider);
+
+  Future<EditableProfile> signInWithEmail({
+    required String email,
+    required String password,
+  });
+
+  Future<EditableProfile> signUpWithEmail({
+    required String email,
+    required String password,
+    required String name,
+    required String username,
+  });
+
+  Future<bool> isUsernameTaken(String username);
 }
 
 class PlaceholderWelcomeAuthService implements WelcomeAuthService {
@@ -20,6 +36,124 @@ class PlaceholderWelcomeAuthService implements WelcomeAuthService {
   ) async {
     return WelcomeAuthOutcome.existingAccount;
   }
+
+  @override
+  Future<EditableProfile> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    return UserRepositoryDefaults.profile;
+  }
+
+  @override
+  Future<EditableProfile> signUpWithEmail({
+    required String email,
+    required String password,
+    required String name,
+    required String username,
+  }) async {
+    return EditableProfile(
+      name: name.trim(),
+      username: username.trim().replaceFirst(RegExp(r'^@+'), ''),
+      bio: '',
+      location: '',
+    );
+  }
+
+  @override
+  Future<bool> isUsernameTaken(String username) async => false;
+}
+
+class WelcomeAuthRepositoryAdapter implements WelcomeAuthService {
+  const WelcomeAuthRepositoryAdapter(this.repository);
+
+  final AuthRepository repository;
+
+  @override
+  Future<WelcomeAuthOutcome> continueWithProvider(
+    WelcomeAuthProvider provider,
+  ) async {
+    throw const AuthFailure('Login Google/Apple belum tersedia di versi ini.');
+  }
+
+  @override
+  Future<EditableProfile> signInWithEmail({
+    required String email,
+    required String password,
+  }) {
+    return repository.signInWithEmail(email: email, password: password);
+  }
+
+  @override
+  Future<EditableProfile> signUpWithEmail({
+    required String email,
+    required String password,
+    required String name,
+    required String username,
+  }) {
+    return repository.signUpWithEmail(
+      email: email,
+      password: password,
+      name: name,
+      username: username,
+    );
+  }
+
+  @override
+  Future<bool> isUsernameTaken(String username) async {
+    final cleanUsername = username.trim().replaceFirst(RegExp(r'^@+'), '');
+    if (cleanUsername.isEmpty) return false;
+    final taken = await repository.fetchTakenUsernames();
+    return taken.any(
+      (value) => value.toLowerCase() == cleanUsername.toLowerCase(),
+    );
+  }
+}
+
+class UnavailableWelcomeAuthService implements WelcomeAuthService {
+  const UnavailableWelcomeAuthService();
+
+  @override
+  Future<WelcomeAuthOutcome> continueWithProvider(
+    WelcomeAuthProvider provider,
+  ) async {
+    throw const AuthFailure('Supabase belum dikonfigurasi.');
+  }
+
+  @override
+  Future<EditableProfile> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    throw const AuthFailure('Supabase belum dikonfigurasi.');
+  }
+
+  @override
+  Future<EditableProfile> signUpWithEmail({
+    required String email,
+    required String password,
+    required String name,
+    required String username,
+  }) async {
+    throw const AuthFailure('Supabase belum dikonfigurasi.');
+  }
+
+  @override
+  Future<bool> isUsernameTaken(String username) async {
+    throw const AuthFailure('Supabase belum dikonfigurasi.');
+  }
+}
+
+class UserRepositoryDefaults {
+  const UserRepositoryDefaults._();
+
+  static const profile = EditableProfile(
+    name: 'Sarah Mae',
+    username: 'sarahmae',
+    bio:
+        'Berusaha hidup lebih berkelanjutan \u{1F33F}\nBelajar, berbagi, dan berdampak.',
+    location: 'Jakarta, Indonesia',
+  );
 }
 
 class WelcomeFlow extends StatefulWidget {
@@ -41,13 +175,33 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
 
   var _step = _WelcomeStep.welcome;
   var _transitionDirection = 1;
+  var _isSubmitting = false;
+  String? _errorMessage;
   final _history = <_WelcomeStep>[];
+  final _loginEmailController = TextEditingController();
+  final _loginPasswordController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _usernameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _loginEmailController.dispose();
+    _loginPasswordController.dispose();
+    _emailController.dispose();
+    _nameController.dispose();
+    _passwordController.dispose();
+    _usernameController.dispose();
+    super.dispose();
+  }
 
   void _go(_WelcomeStep step) {
     setState(() {
       _transitionDirection = 1;
       _history.add(_step);
       _step = step;
+      _errorMessage = null;
     });
   }
 
@@ -56,18 +210,125 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
     setState(() {
       _transitionDirection = -1;
       _step = _history.removeLast();
+      _errorMessage = null;
     });
   }
 
   Future<void> _continueWithProvider(WelcomeAuthProvider provider) async {
-    final outcome = await widget.authService.continueWithProvider(provider);
-    if (!mounted) return;
+    await _submit(() async {
+      final outcome = await widget.authService.continueWithProvider(provider);
+      if (outcome == WelcomeAuthOutcome.existingAccount) {
+        widget.onComplete();
+      } else {
+        _go(_WelcomeStep.createAccount);
+      }
+    });
+  }
 
-    if (outcome == WelcomeAuthOutcome.existingAccount) {
-      widget.onComplete();
-    } else {
-      _go(_WelcomeStep.createAccount);
+  Future<void> _submitSignIn() async {
+    final email = _loginEmailController.text.trim();
+    final password = _loginPasswordController.text;
+    final validationError = _validateEmailPassword(email, password);
+    if (validationError != null) {
+      setState(() => _errorMessage = validationError);
+      return;
     }
+
+    await _submit(() async {
+      await widget.authService.signInWithEmail(
+        email: email,
+        password: password,
+      );
+      widget.onComplete();
+    });
+  }
+
+  void _continueCreateAccount() {
+    final email = _emailController.text.trim();
+    final name = _nameController.text.trim();
+    if (!_isValidEmail(email)) {
+      setState(() => _errorMessage = 'Masukkan email yang valid.');
+      return;
+    }
+    if (name.isEmpty) {
+      setState(() => _errorMessage = 'Nama wajib diisi.');
+      return;
+    }
+    _go(_WelcomeStep.createPassword);
+  }
+
+  void _continueCreatePassword() {
+    final passwordSecurity = _PasswordSecurity.evaluate(
+      _passwordController.text,
+    );
+    if (!passwordSecurity.meetsRequiredRules) {
+      setState(
+        () => _errorMessage =
+            'Password harus memenuhi semua security requirements wajib.',
+      );
+      return;
+    }
+    _go(_WelcomeStep.username);
+  }
+
+  Future<void> _submitSignUp() async {
+    final username = _usernameController.text.trim().replaceFirst(
+      RegExp(r'^@+'),
+      '',
+    );
+    if (!RegExp(r'^[a-zA-Z0-9._]{3,24}$').hasMatch(username)) {
+      setState(
+        () => _errorMessage =
+            'Username 3-24 karakter: huruf, angka, titik, atau underscore.',
+      );
+      return;
+    }
+
+    await _submit(() async {
+      final isTaken = await widget.authService.isUsernameTaken(username);
+      if (isTaken) {
+        throw const AuthFailure('Username sudah dipakai.');
+      }
+      await widget.authService.signUpWithEmail(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        name: _nameController.text.trim(),
+        username: username,
+      );
+      widget.onComplete();
+    });
+  }
+
+  Future<void> _submit(Future<void> Function() action) async {
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+    try {
+      await action();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _errorMessage = _messageFromError(error));
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  String? _validateEmailPassword(String email, String password) {
+    if (!_isValidEmail(email)) return 'Masukkan email yang valid.';
+    if (password.isEmpty) return 'Password wajib diisi.';
+    return null;
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
+  }
+
+  String _messageFromError(Object error) {
+    if (error is AuthFailure) return error.message;
+    return error.toString();
   }
 
   @override
@@ -77,15 +338,27 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
         onStart: () => _go(_WelcomeStep.loginMethod),
       ),
       _WelcomeStep.loginMethod => _LoginMethodScreen(
-        onEmail: () => _go(_WelcomeStep.createAccount),
+        onEmail: () => _go(_WelcomeStep.emailLogin),
         onGoogle: () => _continueWithProvider(WelcomeAuthProvider.google),
         onApple: () => _continueWithProvider(WelcomeAuthProvider.apple),
         onCreateAccount: () => _go(_WelcomeStep.createAccount),
+        errorMessage: _errorMessage,
+      ),
+      _WelcomeStep.emailLogin => _EmailLoginScreen(
+        emailController: _loginEmailController,
+        passwordController: _loginPasswordController,
+        onBack: _back,
+        onLogin: _submitSignIn,
+        isLoading: _isSubmitting,
+        errorMessage: _errorMessage,
       ),
       _WelcomeStep.createAccount => _CreateAccountScreen(
         onBack: _back,
-        onCreateAccount: () => _go(_WelcomeStep.verifyMethod),
+        emailController: _emailController,
+        nameController: _nameController,
+        onCreateAccount: _continueCreateAccount,
         onLogin: () => _go(_WelcomeStep.loginMethod),
+        errorMessage: _errorMessage,
       ),
       _WelcomeStep.verifyMethod => _VerifyMethodScreen(
         onBack: _back,
@@ -106,11 +379,16 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
       ),
       _WelcomeStep.createPassword => _CreatePasswordScreen(
         onBack: _back,
-        onCreateAccount: () => _go(_WelcomeStep.username),
+        passwordController: _passwordController,
+        onCreateAccount: _continueCreatePassword,
+        errorMessage: _errorMessage,
       ),
       _WelcomeStep.username => _UsernameScreen(
         onBack: _back,
-        onContinue: widget.onComplete,
+        usernameController: _usernameController,
+        onContinue: _submitSignUp,
+        isLoading: _isSubmitting,
+        errorMessage: _errorMessage,
       ),
     };
 
@@ -138,6 +416,7 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
 enum _WelcomeStep {
   welcome,
   loginMethod,
+  emailLogin,
   createAccount,
   verifyMethod,
   phoneNumber,
@@ -145,6 +424,76 @@ enum _WelcomeStep {
   whatsappVerification,
   createPassword,
   username,
+}
+
+class _PasswordSecurity {
+  const _PasswordSecurity({
+    required this.hasMinimumLength,
+    required this.hasLowercase,
+    required this.hasUppercase,
+    required this.hasDigit,
+    required this.hasSpecialCharacter,
+  });
+
+  factory _PasswordSecurity.evaluate(String password) {
+    return _PasswordSecurity(
+      hasMinimumLength: password.length >= 8,
+      hasLowercase: RegExp(r'[a-z]').hasMatch(password),
+      hasUppercase: RegExp(r'[A-Z]').hasMatch(password),
+      hasDigit: RegExp(r'\d').hasMatch(password),
+      hasSpecialCharacter: RegExp(r'[^A-Za-z0-9]').hasMatch(password),
+    );
+  }
+
+  final bool hasMinimumLength;
+  final bool hasLowercase;
+  final bool hasUppercase;
+  final bool hasDigit;
+  final bool hasSpecialCharacter;
+
+  bool get meetsRequiredRules {
+    return hasMinimumLength && hasLowercase && hasUppercase && hasDigit;
+  }
+
+  int get requiredRulesMet {
+    return [
+      hasMinimumLength,
+      hasLowercase,
+      hasUppercase,
+      hasDigit,
+    ].where((met) => met).length;
+  }
+
+  double get meterValue {
+    if (meetsRequiredRules) return hasSpecialCharacter ? 1 : .9;
+    return requiredRulesMet * .2;
+  }
+
+  String get meterLabel {
+    if (meetsRequiredRules && hasSpecialCharacter) return 'EXCELLENT';
+    if (meetsRequiredRules) return 'STRONG';
+    if (requiredRulesMet >= 3) return 'GOOD';
+    if (requiredRulesMet >= 2) return 'FAIR';
+    return 'WEAK';
+  }
+
+  Color get meterColor {
+    if (meetsRequiredRules) return kCirculGreen;
+    if (requiredRulesMet >= 2) return const Color(0xFFE7A31A);
+    return const Color(0xFFE5484D);
+  }
+}
+
+class _PasswordRequirement {
+  const _PasswordRequirement({
+    required this.label,
+    required this.isMet,
+    this.isBonus = false,
+  });
+
+  final String label;
+  final bool isMet;
+  final bool isBonus;
 }
 
 class _WelcomeScreen extends StatelessWidget {
@@ -216,12 +565,14 @@ class _LoginMethodScreen extends StatelessWidget {
     required this.onGoogle,
     required this.onApple,
     required this.onCreateAccount,
+    this.errorMessage,
   });
 
   final VoidCallback onEmail;
   final VoidCallback onGoogle;
   final VoidCallback onApple;
   final VoidCallback onCreateAccount;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +614,10 @@ class _LoginMethodScreen extends StatelessWidget {
               foregroundColor: Colors.white,
               borderColor: Colors.black,
             ),
+            if (errorMessage != null) ...[
+              const SizedBox(height: 18),
+              _WelcomeErrorText(errorMessage!),
+            ],
             const SizedBox(height: 34),
             const _OrDivider(),
             const SizedBox(height: 36),
@@ -305,13 +660,19 @@ class _LoginMethodScreen extends StatelessWidget {
 class _CreateAccountScreen extends StatelessWidget {
   const _CreateAccountScreen({
     required this.onBack,
+    required this.emailController,
+    required this.nameController,
     required this.onCreateAccount,
     required this.onLogin,
+    this.errorMessage,
   });
 
   final VoidCallback onBack;
+  final TextEditingController emailController;
+  final TextEditingController nameController;
   final VoidCallback onCreateAccount;
   final VoidCallback onLogin;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -335,41 +696,25 @@ class _CreateAccountScreen extends StatelessWidget {
               style: TextStyle(color: Color(0xFF45504C), fontSize: 15),
             ),
             const SizedBox(height: 40),
-            const _WelcomeField(
+            _WelcomeField(
               label: 'Email Address',
               hint: 'name@example.com',
               icon: Icons.mail_outline_rounded,
+              controller: emailController,
               keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: 22),
-            const _WelcomeField(
+            _WelcomeField(
               label: 'Full Name',
               hint: 'Jane Doe',
               icon: Icons.person_outline_rounded,
+              controller: nameController,
               textCapitalization: TextCapitalization.words,
             ),
-            const SizedBox(height: 22),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Date of Birth',
-                style: TextStyle(
-                  color: Color(0xFF4B5550),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: const [
-                Expanded(child: _DateBox(label: 'DD')),
-                SizedBox(width: 12),
-                Expanded(child: _DateBox(label: 'MM')),
-                SizedBox(width: 12),
-                Expanded(child: _DateBox(label: 'YYYY')),
-              ],
-            ),
+            if (errorMessage != null) ...[
+              const SizedBox(height: 18),
+              _WelcomeErrorText(errorMessage!),
+            ],
           ],
         ),
       ),
@@ -401,6 +746,68 @@ class _CreateAccountScreen extends StatelessWidget {
                 "By creating an account, you agree to EcoAction's Terms\nof Service and Privacy Policy.",
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _EmailLoginScreen extends StatelessWidget {
+  const _EmailLoginScreen({
+    required this.emailController,
+    required this.passwordController,
+    required this.onBack,
+    required this.onLogin,
+    required this.isLoading,
+    this.errorMessage,
+  });
+
+  final TextEditingController emailController;
+  final TextEditingController passwordController;
+  final VoidCallback onBack;
+  final VoidCallback onLogin;
+  final bool isLoading;
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    return _WelcomeScaffold(
+      header: _BackHeader(onBack: onBack),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 42),
+            const _ScreenTitle(
+              title: 'Login using email',
+              subtitle: 'Enter your Circul account email and password.',
+            ),
+            const SizedBox(height: 30),
+            _WelcomeField(
+              label: 'Email Address',
+              hint: 'name@example.com',
+              icon: Icons.mail_outline_rounded,
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 18),
+            _WelcomeField(
+              label: 'Password',
+              hint: 'Password',
+              icon: Icons.lock_outline_rounded,
+              controller: passwordController,
+              obscureText: true,
+            ),
+            if (errorMessage != null) ...[
+              const SizedBox(height: 18),
+              _WelcomeErrorText(errorMessage!),
+            ],
+          ],
+        ),
+      ),
+      bottom: _WelcomePrimaryButton(
+        label: isLoading ? 'Loading...' : 'Login',
+        onPressed: onLogin,
       ),
     );
   }
@@ -591,11 +998,15 @@ class _OtpVerificationScreen extends StatelessWidget {
 class _CreatePasswordScreen extends StatelessWidget {
   const _CreatePasswordScreen({
     required this.onBack,
+    required this.passwordController,
     required this.onCreateAccount,
+    this.errorMessage,
   });
 
   final VoidCallback onBack;
+  final TextEditingController passwordController;
   final VoidCallback onCreateAccount;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -605,18 +1016,22 @@ class _CreatePasswordScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            SizedBox(height: 42),
-            _ScreenTitle(
+          children: [
+            const SizedBox(height: 42),
+            const _ScreenTitle(
               title: 'Create a password',
               subtitle: 'Set a secure password for your account.',
             ),
-            SizedBox(height: 30),
-            _PasswordField(),
-            SizedBox(height: 18),
-            _PasswordStrength(),
-            SizedBox(height: 28),
-            _RequirementCard(),
+            const SizedBox(height: 30),
+            _PasswordField(controller: passwordController),
+            const SizedBox(height: 18),
+            _PasswordStrength(controller: passwordController),
+            if (errorMessage != null) ...[
+              const SizedBox(height: 18),
+              _WelcomeErrorText(errorMessage!),
+            ],
+            const SizedBox(height: 28),
+            _RequirementCard(controller: passwordController),
           ],
         ),
       ),
@@ -638,10 +1053,19 @@ class _CreatePasswordScreen extends StatelessWidget {
 }
 
 class _UsernameScreen extends StatelessWidget {
-  const _UsernameScreen({required this.onBack, required this.onContinue});
+  const _UsernameScreen({
+    required this.onBack,
+    required this.usernameController,
+    required this.onContinue,
+    required this.isLoading,
+    this.errorMessage,
+  });
 
   final VoidCallback onBack;
+  final TextEditingController usernameController;
   final VoidCallback onContinue;
+  final bool isLoading;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -651,35 +1075,27 @@ class _UsernameScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            SizedBox(height: 58),
-            _ScreenTitle(
+          children: [
+            const SizedBox(height: 58),
+            const _ScreenTitle(
               title: 'Choose your username',
               subtitle: 'This is how your friends will find you on Circul.',
             ),
-            SizedBox(height: 36),
-            _PlainInput(hint: '@ username'),
-            SizedBox(height: 14),
-            Row(
-              children: [
-                Icon(Icons.new_releases_outlined, color: Color(0xFFFF3857)),
-                SizedBox(width: 8),
-                Text(
-                  'Username Already Exist',
-                  style: TextStyle(
-                    color: Color(0xFFFF3857),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-            _UsernameSuggestions(),
+            const SizedBox(height: 36),
+            _PlainInput(hint: '@ username', controller: usernameController),
+            if (errorMessage != null) ...[
+              const SizedBox(height: 14),
+              _WelcomeErrorText(errorMessage!),
+            ],
+            const SizedBox(height: 20),
+            const _UsernameSuggestions(),
           ],
         ),
       ),
-      bottom: _WelcomePrimaryButton(label: 'Continue', onPressed: onContinue),
+      bottom: _WelcomePrimaryButton(
+        label: isLoading ? 'Loading...' : 'Continue',
+        onPressed: onContinue,
+      ),
     );
   }
 }
@@ -892,6 +1308,34 @@ class _ScreenTitle extends StatelessWidget {
   }
 }
 
+class _WelcomeErrorText extends StatelessWidget {
+  const _WelcomeErrorText(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.error_outline_rounded, color: Color(0xFFFF3857)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: const TextStyle(
+              color: Color(0xFFFF3857),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              height: 1.3,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _WelcomePrimaryButton extends StatelessWidget {
   const _WelcomePrimaryButton({
     required this.label,
@@ -1026,18 +1470,47 @@ class _WelcomeField extends StatelessWidget {
     required this.label,
     required this.hint,
     required this.icon,
+    required this.controller,
     this.keyboardType,
     this.textCapitalization = TextCapitalization.none,
+    this.obscureText = false,
   });
 
   final String label;
   final String hint;
   final IconData icon;
+  final TextEditingController controller;
   final TextInputType? keyboardType;
   final TextCapitalization textCapitalization;
+  final bool obscureText;
 
   @override
   Widget build(BuildContext context) {
+    final field = obscureText
+        ? _PasswordTextField(
+            controller: controller,
+            hintText: hint,
+            prefixIcon: icon,
+          )
+        : TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            textCapitalization: textCapitalization,
+            decoration: InputDecoration(
+              hintText: hint,
+              prefixIcon: Icon(icon, color: Color(0xFF76817C)),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 18,
+                horizontal: 16,
+              ),
+              border: _fieldBorder(),
+              enabledBorder: _fieldBorder(),
+              focusedBorder: _fieldBorder(color: kCirculGreen, width: 1.4),
+            ),
+          );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1050,36 +1523,22 @@ class _WelcomeField extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        TextField(
-          keyboardType: keyboardType,
-          textCapitalization: textCapitalization,
-          decoration: InputDecoration(
-            hintText: hint,
-            prefixIcon: Icon(icon, color: Color(0xFF76817C)),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              vertical: 18,
-              horizontal: 16,
-            ),
-            border: _fieldBorder(),
-            enabledBorder: _fieldBorder(),
-            focusedBorder: _fieldBorder(color: kCirculGreen, width: 1.4),
-          ),
-        ),
+        field,
       ],
     );
   }
 }
 
 class _PlainInput extends StatelessWidget {
-  const _PlainInput({required this.hint});
+  const _PlainInput({required this.hint, required this.controller});
 
   final String hint;
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
       decoration: InputDecoration(
         hintText: hint,
         filled: true,
@@ -1091,31 +1550,6 @@ class _PlainInput extends StatelessWidget {
         border: _fieldBorder(),
         enabledBorder: _fieldBorder(),
         focusedBorder: _fieldBorder(color: kCirculGreen, width: 1.4),
-      ),
-    );
-  }
-}
-
-class _DateBox extends StatelessWidget {
-  const _DateBox({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: TextField(
-        textAlign: TextAlign.center,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(
-          hintText: label,
-          filled: true,
-          fillColor: Colors.white,
-          border: _fieldBorder(),
-          enabledBorder: _fieldBorder(),
-          focusedBorder: _fieldBorder(color: kCirculGreen, width: 1.4),
-        ),
       ),
     );
   }
@@ -1168,139 +1602,247 @@ class _IndonesiaFlag extends StatelessWidget {
 }
 
 class _PasswordField extends StatelessWidget {
-  const _PasswordField();
+  const _PasswordField({required this.controller});
+
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
-    return const _PasswordTextField();
+    return _PasswordTextField(controller: controller);
   }
 }
 
 class _PasswordTextField extends StatelessWidget {
-  const _PasswordTextField();
+  const _PasswordTextField({
+    required this.controller,
+    this.hintText,
+    this.prefixIcon,
+  });
+
+  final TextEditingController controller;
+  final String? hintText;
+  final IconData? prefixIcon;
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      obscureText: false,
-      initialValue: 'Circul2024!',
-      decoration: InputDecoration(
-        suffixIcon: const Icon(Icons.visibility_outlined),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 18,
+    return _PasswordVisibilityField(
+      controller: controller,
+      hintText: hintText,
+      prefixIcon: prefixIcon,
+      useFormField: true,
+    );
+  }
+}
+
+class _PasswordVisibilityField extends StatefulWidget {
+  const _PasswordVisibilityField({
+    required this.controller,
+    required this.useFormField,
+    this.hintText,
+    this.prefixIcon,
+  });
+
+  final TextEditingController controller;
+  final bool useFormField;
+  final String? hintText;
+  final IconData? prefixIcon;
+
+  @override
+  State<_PasswordVisibilityField> createState() =>
+      _PasswordVisibilityFieldState();
+}
+
+class _PasswordVisibilityFieldState extends State<_PasswordVisibilityField> {
+  var _isObscured = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final decoration = InputDecoration(
+      hintText: widget.hintText,
+      prefixIcon: widget.prefixIcon == null
+          ? null
+          : Icon(widget.prefixIcon, color: const Color(0xFF76817C)),
+      suffixIcon: IconButton(
+        tooltip: _isObscured ? 'Show password' : 'Hide password',
+        onPressed: () => setState(() => _isObscured = !_isObscured),
+        icon: Icon(
+          _isObscured
+              ? Icons.visibility_outlined
+              : Icons.visibility_off_outlined,
         ),
-        border: _fieldBorder(),
-        enabledBorder: _fieldBorder(),
-        focusedBorder: _fieldBorder(color: kCirculGreen, width: 1.4),
       ),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      border: _fieldBorder(),
+      enabledBorder: _fieldBorder(),
+      focusedBorder: _fieldBorder(color: kCirculGreen, width: 1.4),
+    );
+
+    if (widget.useFormField) {
+      return TextFormField(
+        controller: widget.controller,
+        obscureText: _isObscured,
+        decoration: decoration,
+      );
+    }
+
+    return TextField(
+      controller: widget.controller,
+      obscureText: _isObscured,
+      decoration: decoration,
     );
   }
 }
 
 class _PasswordStrength extends StatelessWidget {
-  const _PasswordStrength();
+  const _PasswordStrength({required this.controller});
+
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: const [
-            Text(
-              'STRONG',
-              style: TextStyle(
-                color: kCirculGreen,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, child) {
+        final security = _PasswordSecurity.evaluate(value.text);
+        final percent = (security.meterValue * 100).round();
+
+        return Column(
+          children: [
+            Row(
+              children: [
+                Text(
+                  security.meterLabel,
+                  style: TextStyle(
+                    color: security.meterColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '$percent% Secure',
+                  style: const TextStyle(
+                    color: Color(0xFF3F4944),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: security.meterValue,
+                minHeight: 6,
+                backgroundColor: const Color(0xFFE1E5E3),
+                color: security.meterColor,
               ),
             ),
-            Spacer(),
-            Text(
-              '90% Secure',
-              style: TextStyle(color: Color(0xFF3F4944), fontSize: 13),
-            ),
           ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: const LinearProgressIndicator(
-            value: .9,
-            minHeight: 6,
-            backgroundColor: Color(0xFFE1E5E3),
-            color: kCirculGreen,
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
 
 class _RequirementCard extends StatelessWidget {
-  const _RequirementCard();
+  const _RequirementCard({required this.controller});
+
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
-    const items = [
-      'Minimum 8 characters',
-      'At least one lowercase letter',
-      'At least one uppercase letter',
-      'At least one numeric digit',
-      'Special characters (Bonus)',
-    ];
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, child) {
+        final security = _PasswordSecurity.evaluate(value.text);
+        final items = [
+          _PasswordRequirement(
+            label: 'Minimum 8 characters',
+            isMet: security.hasMinimumLength,
+          ),
+          _PasswordRequirement(
+            label: 'At least one lowercase letter',
+            isMet: security.hasLowercase,
+          ),
+          _PasswordRequirement(
+            label: 'At least one uppercase letter',
+            isMet: security.hasUppercase,
+          ),
+          _PasswordRequirement(
+            label: 'At least one numeric digit',
+            isMet: security.hasDigit,
+          ),
+          _PasswordRequirement(
+            label: 'Special characters (Bonus)',
+            isMet: security.hasSpecialCharacter,
+            isBonus: true,
+          ),
+        ];
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8ECEA)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'SECURITY REQUIREMENTS',
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE8ECEA)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'SECURITY REQUIREMENTS',
+                style: TextStyle(
+                  color: Color(0xFF3F4944),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 18),
+              for (final item in items) ...[
+                _RequirementRow(item: item),
+                if (item != items.last) const SizedBox(height: 16),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RequirementRow extends StatelessWidget {
+  const _RequirementRow({required this.item});
+
+  final _PasswordRequirement item;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = item.isMet ? kCirculGreen : const Color(0xFF9CA3AF);
+    final icon = item.isBonus
+        ? (item.isMet ? Icons.stars_rounded : Icons.stars_outlined)
+        : (item.isMet
+              ? Icons.check_circle_rounded
+              : Icons.radio_button_unchecked_rounded);
+
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 19),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            item.label,
             style: TextStyle(
-              color: Color(0xFF3F4944),
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
+              color: item.isMet ? kInk : const Color(0xFF5F6964),
+              fontSize: 14,
+              fontWeight: item.isBonus ? FontWeight.w800 : null,
             ),
           ),
-          const SizedBox(height: 18),
-          for (final item in items) ...[
-            Row(
-              children: [
-                Icon(
-                  item.startsWith('Special')
-                      ? Icons.stars_outlined
-                      : Icons.check_circle_rounded,
-                  color: kCirculGreen,
-                  size: 19,
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    item,
-                    style: TextStyle(
-                      color: item.startsWith('Special') ? kCirculGreen : kInk,
-                      fontSize: 14,
-                      fontWeight: item.startsWith('Special')
-                          ? FontWeight.w800
-                          : null,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (item != items.last) const SizedBox(height: 16),
-          ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
