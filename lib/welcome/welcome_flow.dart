@@ -105,10 +105,7 @@ class WelcomeAuthRepositoryAdapter implements WelcomeAuthService {
   Future<bool> isUsernameTaken(String username) async {
     final cleanUsername = username.trim().replaceFirst(RegExp(r'^@+'), '');
     if (cleanUsername.isEmpty) return false;
-    final taken = await repository.fetchTakenUsernames();
-    return taken.any(
-      (value) => value.toLowerCase() == cleanUsername.toLowerCase(),
-    );
+    return repository.isUsernameTaken(cleanUsername);
   }
 }
 

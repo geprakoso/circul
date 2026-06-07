@@ -25,5 +25,7 @@ abstract class AuthRepository implements ProfileRemoteDataSource {
     required String password,
   });
 
+  Future<bool> isUsernameTaken(String username);
+
   Future<void> signOut();
 }

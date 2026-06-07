@@ -1239,6 +1239,14 @@ class _FakeAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<bool> isUsernameTaken(String username) async {
+    final cleanUsername = username.trim().replaceFirst(RegExp(r'^@+'), '');
+    return _takenUsernames.any(
+      (value) => value.toLowerCase() == cleanUsername.toLowerCase(),
+    );
+  }
+
+  @override
   Future<void> saveCurrentProfile(EditableProfile profile) async {
     _profile = profile;
     _takenUsernames.add(profile.username);

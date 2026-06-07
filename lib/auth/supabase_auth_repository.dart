@@ -6,8 +6,14 @@ import 'auth_repository.dart';
 class SupabaseAuthRepository implements AuthRepository {
   SupabaseAuthRepository(this._client);
 
-  static const url = String.fromEnvironment('SUPABASE_URL');
-  static const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+  static const url = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://uvlqhtueprksnoeeooio.supabase.co',
+  );
+  static const anonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: 'sb_publishable_vxw4wKnwUbVhYvnXD3FYMw_RDEfurMe',
+  );
 
   static Future<AuthRepository?> initializeFromEnvironment() async {
     if (url.trim().isEmpty || anonKey.trim().isEmpty) return null;
@@ -51,6 +57,22 @@ class SupabaseAuthRepository implements AuthRepository {
           : await query.neq('id', excludingUserId.trim());
 
       return rows.map((row) => row['username']).whereType<String>().toSet();
+    } catch (error) {
+      throw AuthFailure(_messageFromError(error));
+    }
+  }
+
+  @override
+  Future<bool> isUsernameTaken(String username) async {
+    final cleanUsername = _cleanUsername(username);
+    if (cleanUsername.isEmpty) return false;
+
+    try {
+      final response = await _client.rpc<bool>(
+        'is_username_taken',
+        params: {'check_username': cleanUsername},
+      );
+      return response;
     } catch (error) {
       throw AuthFailure(_messageFromError(error));
     }

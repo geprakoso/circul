@@ -36,6 +36,23 @@ to authenticated
 using ((select auth.uid()) = id)
 with check ((select auth.uid()) = id);
 
+create or replace function public.is_username_taken(check_username text)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where lower(username) = lower(regexp_replace(btrim(check_username), '^@+', ''))
+  );
+$$;
+
+revoke all on function public.is_username_taken(text) from public;
+grant execute on function public.is_username_taken(text) to anon, authenticated;
+
 create or replace function public.handle_new_user_profile()
 returns trigger
 language plpgsql
