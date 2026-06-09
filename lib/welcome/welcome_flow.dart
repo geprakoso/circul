@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../auth/auth_repository.dart';
 import '../core/constants.dart';
@@ -11,6 +12,8 @@ enum WelcomeAuthProvider { google, apple }
 
 enum WelcomeAuthOutcome { existingAccount, needsAccount }
 
+const _emailVerificationCodeLength = 8;
+
 abstract class WelcomeAuthService {
   Future<WelcomeAuthOutcome> continueWithProvider(WelcomeAuthProvider provider);
 
@@ -19,12 +22,18 @@ abstract class WelcomeAuthService {
     required String password,
   });
 
+  Future<void> resendEmailVerification(String email);
+
+  Future<void> verifyEmailOtp({required String email, required String token});
+
   Future<EditableProfile> signUpWithEmail({
     required String email,
     required String password,
     required String name,
     required String username,
   });
+
+  Future<bool> isEmailTaken(String email);
 
   Future<bool> isUsernameTaken(String username);
 }
@@ -48,6 +57,15 @@ class PlaceholderWelcomeAuthService implements WelcomeAuthService {
   }
 
   @override
+  Future<void> resendEmailVerification(String email) async {}
+
+  @override
+  Future<void> verifyEmailOtp({
+    required String email,
+    required String token,
+  }) async {}
+
+  @override
   Future<EditableProfile> signUpWithEmail({
     required String email,
     required String password,
@@ -64,6 +82,9 @@ class PlaceholderWelcomeAuthService implements WelcomeAuthService {
 
   @override
   Future<bool> isUsernameTaken(String username) async => false;
+
+  @override
+  Future<bool> isEmailTaken(String email) async => false;
 }
 
 class WelcomeAuthRepositoryAdapter implements WelcomeAuthService {
@@ -87,6 +108,16 @@ class WelcomeAuthRepositoryAdapter implements WelcomeAuthService {
   }
 
   @override
+  Future<void> resendEmailVerification(String email) {
+    return repository.resendEmailVerification(email);
+  }
+
+  @override
+  Future<void> verifyEmailOtp({required String email, required String token}) {
+    return repository.verifyEmailOtp(email: email, token: token);
+  }
+
+  @override
   Future<EditableProfile> signUpWithEmail({
     required String email,
     required String password,
@@ -106,6 +137,13 @@ class WelcomeAuthRepositoryAdapter implements WelcomeAuthService {
     final cleanUsername = username.trim().replaceFirst(RegExp(r'^@+'), '');
     if (cleanUsername.isEmpty) return false;
     return repository.isUsernameTaken(cleanUsername);
+  }
+
+  @override
+  Future<bool> isEmailTaken(String email) async {
+    final cleanEmail = email.trim();
+    if (cleanEmail.isEmpty) return false;
+    return repository.isEmailTaken(cleanEmail);
   }
 }
 
@@ -128,6 +166,19 @@ class UnavailableWelcomeAuthService implements WelcomeAuthService {
   }
 
   @override
+  Future<void> resendEmailVerification(String email) async {
+    throw const AuthFailure('Supabase belum dikonfigurasi.');
+  }
+
+  @override
+  Future<void> verifyEmailOtp({
+    required String email,
+    required String token,
+  }) async {
+    throw const AuthFailure('Supabase belum dikonfigurasi.');
+  }
+
+  @override
   Future<EditableProfile> signUpWithEmail({
     required String email,
     required String password,
@@ -139,6 +190,11 @@ class UnavailableWelcomeAuthService implements WelcomeAuthService {
 
   @override
   Future<bool> isUsernameTaken(String username) async {
+    throw const AuthFailure('Supabase belum dikonfigurasi.');
+  }
+
+  @override
+  Future<bool> isEmailTaken(String email) async {
     throw const AuthFailure('Supabase belum dikonfigurasi.');
   }
 }
@@ -189,6 +245,7 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
   final _nameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _usernameController = TextEditingController();
+  final _emailVerificationCodeController = TextEditingController();
 
   @override
   void initState() {
@@ -206,6 +263,7 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
     _nameController.dispose();
     _passwordController.dispose();
     _usernameController.dispose();
+    _emailVerificationCodeController.dispose();
     super.dispose();
   }
 
@@ -248,15 +306,22 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
     }
 
     await _submit(() async {
-      await widget.authService.signInWithEmail(
-        email: email,
-        password: password,
-      );
+      try {
+        await widget.authService.signInWithEmail(
+          email: email,
+          password: password,
+        );
+      } on AuthEmailVerificationPending catch (error) {
+        _emailController.text = error.email;
+        _emailVerificationCodeController.clear();
+        _go(_WelcomeStep.emailVerification);
+        return;
+      }
       widget.onComplete();
     });
   }
 
-  void _continueCreateAccount() {
+  Future<void> _continueCreateAccount() async {
     final email = _emailController.text.trim();
     final name = _nameController.text.trim();
     if (!_isValidEmail(email)) {
@@ -267,7 +332,14 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
       setState(() => _errorMessage = 'Nama wajib diisi.');
       return;
     }
-    _go(_WelcomeStep.createPassword);
+
+    await _submit(() async {
+      final isTaken = await widget.authService.isEmailTaken(email);
+      if (isTaken) {
+        throw const AuthFailure('Email already exist, please login.');
+      }
+      _go(_WelcomeStep.createPassword);
+    });
   }
 
   void _continueCreatePassword() {
@@ -305,6 +377,43 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
         name: _nameController.text.trim(),
         username: username,
       );
+      _go(_WelcomeStep.emailVerification);
+    });
+  }
+
+  Future<bool> _resendEmailVerification() async {
+    final email = _emailController.text.trim();
+    if (!_isValidEmail(email)) {
+      setState(() => _errorMessage = 'Masukkan email yang valid.');
+      return false;
+    }
+
+    try {
+      await widget.authService.resendEmailVerification(email);
+      if (!mounted) return false;
+      setState(() => _errorMessage = 'Email verification sent.');
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      setState(() => _errorMessage = _messageFromError(error));
+      return false;
+    }
+  }
+
+  Future<void> _verifyEmailCode() async {
+    final email = _emailController.text.trim();
+    final token = _emailVerificationCodeController.text.trim();
+    if (!_isValidEmail(email)) {
+      setState(() => _errorMessage = 'Masukkan email yang valid.');
+      return;
+    }
+    if (!RegExp(r'^\d{8}$').hasMatch(token)) {
+      setState(() => _errorMessage = 'Masukkan kode verifikasi 8 digit.');
+      return;
+    }
+
+    await _submit(() async {
+      await widget.authService.verifyEmailOtp(email: email, token: token);
       widget.onComplete();
     });
   }
@@ -468,8 +577,9 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
         onBack: _back,
         emailController: _emailController,
         nameController: _nameController,
-        onCreateAccount: _continueCreateAccount,
+        onCreateAccount: () => _continueCreateAccount(),
         onLogin: () => _go(_WelcomeStep.loginMethod),
+        isLoading: _isSubmitting,
         errorMessage: _errorMessage,
       ),
       _WelcomeStep.verifyMethod => _VerifyMethodScreen(
@@ -483,7 +593,12 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
       ),
       _WelcomeStep.emailVerification => _OtpVerificationScreen.email(
         onBack: _back,
-        onVerify: () => _go(_WelcomeStep.createPassword),
+        emailAddress: _emailController.text.trim(),
+        verificationCodeController: _emailVerificationCodeController,
+        onVerify: _verifyEmailCode,
+        onResendEmail: _resendEmailVerification,
+        message: _errorMessage,
+        isLoading: _isSubmitting,
       ),
       _WelcomeStep.whatsappVerification => _OtpVerificationScreen.whatsapp(
         onBack: _back,
@@ -781,6 +896,7 @@ class _CreateAccountScreen extends StatelessWidget {
     required this.nameController,
     required this.onCreateAccount,
     required this.onLogin,
+    required this.isLoading,
     this.errorMessage,
   });
 
@@ -789,6 +905,7 @@ class _CreateAccountScreen extends StatelessWidget {
   final TextEditingController nameController;
   final VoidCallback onCreateAccount;
   final VoidCallback onLogin;
+  final bool isLoading;
   final String? errorMessage;
 
   @override
@@ -838,7 +955,7 @@ class _CreateAccountScreen extends StatelessWidget {
       bottom: Column(
         children: [
           _WelcomePrimaryButton(
-            label: 'Create Account',
+            label: isLoading ? 'Checking...' : 'Create Account',
             onPressed: onCreateAccount,
           ),
           const SizedBox(height: 12),
@@ -1024,65 +1141,202 @@ class _PhoneNumberScreen extends StatelessWidget {
   }
 }
 
-class _OtpVerificationScreen extends StatelessWidget {
+class _OtpVerificationScreen extends StatefulWidget {
   const _OtpVerificationScreen.email({
     required this.onBack,
+    required this.emailAddress,
+    required this.verificationCodeController,
     required this.onVerify,
+    required this.onResendEmail,
+    required this.isLoading,
+    this.message,
   }) : isWhatsapp = false;
 
   const _OtpVerificationScreen.whatsapp({
     required this.onBack,
     required this.onVerify,
-  }) : isWhatsapp = true;
+  }) : emailAddress = '',
+       verificationCodeController = null,
+       onResendEmail = null,
+       isLoading = false,
+       message = null,
+       isWhatsapp = true;
 
   final bool isWhatsapp;
+  final String emailAddress;
+  final TextEditingController? verificationCodeController;
   final VoidCallback onBack;
   final VoidCallback onVerify;
+  final Future<bool> Function()? onResendEmail;
+  final bool isLoading;
+  final String? message;
+
+  @override
+  State<_OtpVerificationScreen> createState() => _OtpVerificationScreenState();
+}
+
+class _OtpVerificationScreenState extends State<_OtpVerificationScreen> {
+  static const _resendCooldownSeconds = 60;
+
+  Timer? _resendTimer;
+  var _remainingSeconds = _resendCooldownSeconds;
+  var _isResending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.verificationCodeController?.addListener(_refreshVerifyButton);
+    if (!widget.isWhatsapp) _startResendCooldown();
+  }
+
+  @override
+  void didUpdateWidget(covariant _OtpVerificationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.verificationCodeController !=
+        widget.verificationCodeController) {
+      oldWidget.verificationCodeController?.removeListener(
+        _refreshVerifyButton,
+      );
+      widget.verificationCodeController?.addListener(_refreshVerifyButton);
+    }
+  }
+
+  @override
+  void dispose() {
+    _resendTimer?.cancel();
+    widget.verificationCodeController?.removeListener(_refreshVerifyButton);
+    super.dispose();
+  }
+
+  void _refreshVerifyButton() {
+    if (mounted) setState(() {});
+  }
+
+  void _startResendCooldown() {
+    _resendTimer?.cancel();
+    setState(() => _remainingSeconds = _resendCooldownSeconds);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_remainingSeconds <= 1) {
+        timer.cancel();
+        setState(() => _remainingSeconds = 0);
+        return;
+      }
+      setState(() => _remainingSeconds--);
+    });
+  }
+
+  Future<void> _resendEmail() async {
+    final resend = widget.onResendEmail;
+    if (resend == null || _remainingSeconds > 0 || _isResending) return;
+
+    setState(() => _isResending = true);
+    final sent = await resend();
+    if (!mounted) return;
+    setState(() => _isResending = false);
+    if (sent) _startResendCooldown();
+  }
+
+  String get _remainingLabel {
+    final minutes = (_remainingSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (_remainingSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  bool get _canVerify {
+    if (widget.isLoading) return false;
+    if (widget.isWhatsapp) return true;
+
+    final token = widget.verificationCodeController?.text.trim() ?? '';
+    return RegExp(r'^\d{8}$').hasMatch(token);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final title = isWhatsapp ? 'Verify your phone' : 'Verify your email';
-    final subtitle = isWhatsapp
+    final title = widget.isWhatsapp ? 'Verify your phone' : 'Verify your email';
+    final verificationEmail = widget.emailAddress.isEmpty
+        ? 'your email'
+        : widget.emailAddress;
+    final subtitle = widget.isWhatsapp
         ? "We've sent a 6-digit verification code to\n+62 8000-0000 via WhatsApp."
-        : "We've sent a 6-digit verification code to\nhello@example.com. Please enter it below to\ncontinue.";
+        : "We've sent an 8-digit verification code to\n$verificationEmail. Enter it below to continue.";
 
     return _WelcomeScaffold(
-      header: isWhatsapp
-          ? _BackHeader(onBack: onBack)
-          : _BackLogoHeader(onBack: onBack),
+      header: widget.isWhatsapp
+          ? _BackHeader(onBack: widget.onBack)
+          : _BackLogoHeader(onBack: widget.onBack),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: isWhatsapp ? 58 : 70),
+            SizedBox(height: widget.isWhatsapp ? 58 : 70),
             _ScreenTitle(title: title, subtitle: subtitle),
             const SizedBox(height: 32),
-            const _OtpBoxes(),
+            if (widget.isWhatsapp)
+              const _OtpBoxes()
+            else
+              _VerificationCodeField(
+                controller: widget.verificationCodeController!,
+              ),
+            if (!widget.isWhatsapp) ...[
+              const SizedBox(height: 18),
+              const Center(
+                child: Icon(
+                  Icons.mark_email_read_outlined,
+                  color: kCirculGreen,
+                  size: 46,
+                ),
+              ),
+            ],
             const SizedBox(height: 28),
             Center(
               child: Text(
-                isWhatsapp
+                widget.isWhatsapp
                     ? "Didn't receive the code? Resend code"
-                    : "Didn't receive the code?",
+                    : "Didn't receive the email?",
                 style: TextStyle(
-                  color: isWhatsapp ? kCirculGreen : const Color(0xFF3F4944),
+                  color: widget.isWhatsapp
+                      ? kCirculGreen
+                      : const Color(0xFF3F4944),
                   fontSize: 15,
                 ),
               ),
             ),
-            if (!isWhatsapp) ...[
-              const SizedBox(height: 18),
-              const Center(
-                child: Text(
-                  'C Resend code',
-                  style: TextStyle(
-                    color: kCirculGreen,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
+            if (!widget.isWhatsapp) ...[
+              const SizedBox(height: 10),
+              Center(
+                child: TextButton.icon(
+                  onPressed: _remainingSeconds == 0 && !_isResending
+                      ? _resendEmail
+                      : null,
+                  icon: Icon(
+                    Icons.refresh_rounded,
+                    size: 17,
+                    color: _remainingSeconds == 0 && !_isResending
+                        ? kCirculGreen
+                        : const Color(0xFF9CA3AF),
+                  ),
+                  label: Text(
+                    _isResending
+                        ? 'Sending...'
+                        : _remainingSeconds > 0
+                        ? 'Request new email in $_remainingLabel'
+                        : 'Request new email',
+                    style: TextStyle(
+                      color: _remainingSeconds == 0 && !_isResending
+                          ? kCirculGreen
+                          : const Color(0xFF9CA3AF),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
+              if (widget.message != null) ...[
+                const SizedBox(height: 12),
+                _VerificationMessage(widget.message!),
+              ],
             ],
           ],
         ),
@@ -1090,16 +1344,13 @@ class _OtpVerificationScreen extends StatelessWidget {
       bottom: Column(
         children: [
           _WelcomePrimaryButton(
-            label: isWhatsapp ? 'Verify Code' : 'Verify',
-            icon: isWhatsapp
-                ? Icons.check_circle_outline_rounded
-                : Icons.arrow_forward_rounded,
-            onPressed: onVerify,
-            backgroundColor: isWhatsapp
+            label: widget.isLoading ? 'Verifying...' : 'Verify Code',
+            onPressed: _canVerify ? widget.onVerify : null,
+            backgroundColor: widget.isWhatsapp
                 ? kCirculGreen
                 : const Color(0xFF8AAE9F),
           ),
-          if (isWhatsapp) ...[
+          if (widget.isWhatsapp) ...[
             const SizedBox(height: 16),
             const _LegalText(
               text: "By continuing, you agree to Circul's Terms of Service.",
@@ -1164,6 +1415,87 @@ class _CreatePasswordScreen extends StatelessWidget {
             text: 'By creating an account, you agree to our Terms of Service.',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _VerificationMessage extends StatelessWidget {
+  const _VerificationMessage(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final isError =
+        message.toLowerCase().contains('gagal') ||
+        message.toLowerCase().contains('error') ||
+        message.toLowerCase().contains('supabase') ||
+        message.toLowerCase().contains('invalid') ||
+        message.toLowerCase().contains('kedaluwarsa');
+    final color = isError ? const Color(0xFFFF3857) : kCirculGreen;
+
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+            color: color,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VerificationCodeField extends StatelessWidget {
+  const _VerificationCodeField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(_emailVerificationCodeLength),
+      ],
+      maxLength: _emailVerificationCodeLength,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: kInk,
+        fontSize: 24,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 0,
+      ),
+      decoration: InputDecoration(
+        counterText: '',
+        hintText: '00000000',
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 18,
+        ),
+        border: _fieldBorder(),
+        enabledBorder: _fieldBorder(),
+        focusedBorder: _fieldBorder(color: kCirculGreen, width: 1.4),
       ),
     );
   }
@@ -1492,7 +1824,7 @@ class _WelcomePrimaryButton extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final IconData? icon;
   final Color backgroundColor;
 
@@ -1502,6 +1834,8 @@ class _WelcomePrimaryButton extends StatelessWidget {
       onPressed: onPressed,
       style: FilledButton.styleFrom(
         backgroundColor: backgroundColor,
+        disabledBackgroundColor: const Color(0xFFC7D0CB),
+        disabledForegroundColor: Colors.white,
         foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(56),
         elevation: 8,

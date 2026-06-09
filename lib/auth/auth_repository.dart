@@ -10,6 +10,13 @@ class AuthFailure implements Exception {
   String toString() => message;
 }
 
+class AuthEmailVerificationPending extends AuthFailure {
+  const AuthEmailVerificationPending(this.email)
+    : super('Email belum diverifikasi. Kode verifikasi baru sudah dikirim.');
+
+  final String email;
+}
+
 abstract class AuthRepository implements ProfileRemoteDataSource {
   bool get hasActiveSession;
 
@@ -24,6 +31,12 @@ abstract class AuthRepository implements ProfileRemoteDataSource {
     required String email,
     required String password,
   });
+
+  Future<void> resendEmailVerification(String email);
+
+  Future<void> verifyEmailOtp({required String email, required String token});
+
+  Future<bool> isEmailTaken(String email);
 
   Future<bool> isUsernameTaken(String username);
 

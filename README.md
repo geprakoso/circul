@@ -70,6 +70,32 @@ Run the app:
 flutter run
 ```
 
+## Supabase Auth Redirect
+
+Email verification links redirect back to the app with:
+
+```text
+com.example.circul://login-callback
+```
+
+Add that URL to **Supabase Dashboard > Authentication > URL Configuration > Redirect URLs**. The app also supports overriding it at build time:
+
+```sh
+flutter run --dart-define=SUPABASE_EMAIL_REDIRECT_TO=com.example.circul://login-callback
+```
+
+For development with SMTP providers that rewrite links, use an OTP code in the
+Supabase **Confirm signup** email template instead of a clickable verification
+link:
+
+```html
+<h2>Verify your Circul email</h2>
+<p>Your verification code is:</p>
+<h1>{{ .Token }}</h1>
+```
+
+The app verifies that 6-digit code directly with Supabase.
+
 Run static analysis:
 
 ```sh

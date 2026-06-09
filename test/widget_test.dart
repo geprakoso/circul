@@ -18,11 +18,19 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('welcome wizard completes email sign-up path', (tester) async {
+  testWidgets('welcome wizard routes email sign-up to verification', (
+    tester,
+  ) async {
     var completed = false;
+    final authRepository = _FakeAuthRepository(authenticated: false);
 
     await tester.pumpWidget(
-      MaterialApp(home: WelcomeFlow(onComplete: () => completed = true)),
+      MaterialApp(
+        home: WelcomeFlow(
+          authService: WelcomeAuthRepositoryAdapter(authRepository),
+          onComplete: () => completed = true,
+        ),
+      ),
     );
 
     expect(find.text('Welcome to Circul'), findsOneWidget);
@@ -51,6 +59,81 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Verify your email'), findsOneWidget);
+    expect(find.text('Request new email in 01:00'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextButton>(
+            find.widgetWithText(TextButton, 'Request new email in 01:00'),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.pump(const Duration(seconds: 60));
+    await tester.pump();
+
+    expect(find.text('Request new email'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextButton>(
+            find.widgetWithText(TextButton, 'Request new email'),
+          )
+          .onPressed,
+      isNotNull,
+    );
+
+    expect(authRepository.resendEmailVerificationCount, 0);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Request new email'));
+    await tester.pump();
+
+    expect(authRepository.resendEmailVerificationCount, 1);
+    expect(find.text('Request new email in 01:00'), findsOneWidget);
+    expect(completed, isFalse);
+
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Verify Code'),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '00000000'),
+      '1234567',
+    );
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Verify Code'),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '00000000'),
+      '12345678',
+    );
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Verify Code'),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Verify Code'));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.verifiedEmailOtpToken, '12345678');
     expect(completed, isTrue);
   });
 
@@ -134,6 +217,49 @@ void main() {
       expect(find.text('Choose your username'), findsOneWidget);
     },
   );
+
+  testWidgets('create account blocks email that already exists', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WelcomeFlow(
+          authService: WelcomeAuthRepositoryAdapter(
+            _FakeAuthRepository(
+              authenticated: false,
+              takenEmails: const {'maya@example.com'},
+            ),
+          ),
+          onComplete: () {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Start Check-in'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextButton));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'name@example.com'),
+      'maya@example.com',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'Jane Doe'), 'Maya');
+    await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Account'), findsWidgets);
+    expect(find.text('Email already exist, please login.'), findsOneWidget);
+    expect(find.text('Create a password'), findsNothing);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'name@example.com'),
+      'new@example.com',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Create Account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create a password'), findsOneWidget);
+  });
 
   testWidgets(
     'username recommendations appear when database username is taken',
@@ -230,6 +356,70 @@ void main() {
     expect(completed, isTrue);
   });
 
+  testWidgets('email login with pending verification resends code', (
+    tester,
+  ) async {
+    var completed = false;
+    final authRepository = _FakeAuthRepository(
+      authenticated: false,
+      pendingVerificationEmails: {'maya@example.com'},
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WelcomeFlow(
+          authService: WelcomeAuthRepositoryAdapter(authRepository),
+          onComplete: () => completed = true,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Start Check-in'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Login using Email'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'name@example.com'),
+      'maya@example.com',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Password'),
+      'Password1',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Login'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Verify your email'), findsOneWidget);
+    expect(
+      find.textContaining(
+        "We've sent an 8-digit verification code to\nmaya@example.com.",
+      ),
+      findsOneWidget,
+    );
+    expect(authRepository.resendEmailVerificationCount, 1);
+    expect(completed, isFalse);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '00000000'),
+      '12345678',
+    );
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Verify Code'),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Verify Code'));
+    await tester.pumpAndSettle();
+
+    expect(authRepository.verifiedEmailOtpToken, '12345678');
+    expect(completed, isTrue);
+  });
+
   testWidgets('unauthenticated app launch shows welcome flow', (tester) async {
     await tester.pumpWidget(
       CirculApp(
@@ -243,7 +433,9 @@ void main() {
     expect(find.bySemanticsLabel('Home'), findsNothing);
   });
 
-  testWidgets('email sign-up enters shell and loads profile', (tester) async {
+  testWidgets('email sign-up reaches verification before entering shell', (
+    tester,
+  ) async {
     final authRepository = _FakeAuthRepository(authenticated: false);
 
     await tester.pumpWidget(
@@ -276,13 +468,8 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('Home'), findsOneWidget);
-
-    await tester.tap(find.bySemanticsLabel('Profil'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Maya'), findsWidgets);
-    expect(find.text('@maya'), findsOneWidget);
+    expect(find.text('Verify your email'), findsOneWidget);
+    expect(find.bySemanticsLabel('Home'), findsNothing);
   });
 
   testWidgets('existing auth session skips welcome flow', (tester) async {
@@ -1214,13 +1401,21 @@ class _FakeAuthRepository implements AuthRepository {
     required bool authenticated,
     EditableProfile profile = UserRepository.defaultProfile,
     Set<String> takenUsernames = const {},
+    Set<String> takenEmails = const {},
+    Set<String> pendingVerificationEmails = const {},
   }) : _authenticated = authenticated,
        _profile = profile,
-       _takenUsernames = Set<String>.of(takenUsernames)..add(profile.username);
+       _takenUsernames = Set<String>.of(takenUsernames)..add(profile.username),
+       _takenEmails = Set<String>.of(takenEmails),
+       _pendingVerificationEmails = Set<String>.of(pendingVerificationEmails);
 
   bool _authenticated;
   EditableProfile _profile;
   final Set<String> _takenUsernames;
+  final Set<String> _takenEmails;
+  final Set<String> _pendingVerificationEmails;
+  var resendEmailVerificationCount = 0;
+  String? verifiedEmailOtpToken;
 
   @override
   String? get currentUserId => _authenticated ? 'fake-user-id' : null;
@@ -1236,6 +1431,12 @@ class _FakeAuthRepository implements AuthRepository {
   @override
   Future<Set<String>> fetchTakenUsernames({String excludingUserId = ''}) async {
     return _takenUsernames;
+  }
+
+  @override
+  Future<bool> isEmailTaken(String email) async {
+    final cleanEmail = email.trim().toLowerCase();
+    return _takenEmails.any((value) => value.toLowerCase() == cleanEmail);
   }
 
   @override
@@ -1257,8 +1458,33 @@ class _FakeAuthRepository implements AuthRepository {
     required String email,
     required String password,
   }) async {
+    final cleanEmail = email.trim();
+    if (_pendingVerificationEmails.any(
+      (value) => value.toLowerCase() == cleanEmail.toLowerCase(),
+    )) {
+      await resendEmailVerification(cleanEmail);
+      throw AuthEmailVerificationPending(cleanEmail);
+    }
+
     _authenticated = true;
     return _profile;
+  }
+
+  @override
+  Future<void> resendEmailVerification(String email) async {
+    resendEmailVerificationCount++;
+  }
+
+  @override
+  Future<void> verifyEmailOtp({
+    required String email,
+    required String token,
+  }) async {
+    verifiedEmailOtpToken = token;
+    _pendingVerificationEmails.removeWhere(
+      (value) => value.toLowerCase() == email.trim().toLowerCase(),
+    );
+    _authenticated = true;
   }
 
   @override
@@ -1268,6 +1494,13 @@ class _FakeAuthRepository implements AuthRepository {
     required String name,
     required String username,
   }) async {
+    final cleanEmail = email.trim();
+    if (_takenEmails.any(
+      (value) => value.toLowerCase() == cleanEmail.toLowerCase(),
+    )) {
+      throw const AuthFailure('Email already exist, please login.');
+    }
+
     final cleanUsername = username.trim().replaceFirst(RegExp(r'^@+'), '');
     if (_takenUsernames.any(
       (value) => value.toLowerCase() == cleanUsername.toLowerCase(),
@@ -1276,6 +1509,7 @@ class _FakeAuthRepository implements AuthRepository {
     }
 
     _authenticated = true;
+    _takenEmails.add(cleanEmail);
     _profile = EditableProfile(
       name: name.trim(),
       username: cleanUsername,

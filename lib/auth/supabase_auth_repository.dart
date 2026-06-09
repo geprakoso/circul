@@ -14,6 +14,10 @@ class SupabaseAuthRepository implements AuthRepository {
     'SUPABASE_ANON_KEY',
     defaultValue: 'sb_publishable_vxw4wKnwUbVhYvnXD3FYMw_RDEfurMe',
   );
+  static const emailRedirectTo = String.fromEnvironment(
+    'SUPABASE_EMAIL_REDIRECT_TO',
+    defaultValue: 'com.example.circul://login-callback',
+  );
 
   static Future<AuthRepository?> initializeFromEnvironment() async {
     if (url.trim().isEmpty || anonKey.trim().isEmpty) return null;
@@ -63,6 +67,22 @@ class SupabaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<bool> isEmailTaken(String email) async {
+    final cleanEmail = email.trim();
+    if (cleanEmail.isEmpty) return false;
+
+    try {
+      final response = await _client.rpc<bool>(
+        'is_email_taken',
+        params: {'check_email': cleanEmail},
+      );
+      return response;
+    } catch (error) {
+      throw AuthFailure(_messageFromError(error));
+    }
+  }
+
+  @override
   Future<bool> isUsernameTaken(String username) async {
     final cleanUsername = _cleanUsername(username);
     if (cleanUsername.isEmpty) return false;
@@ -100,9 +120,10 @@ class SupabaseAuthRepository implements AuthRepository {
     required String email,
     required String password,
   }) async {
+    final cleanEmail = email.trim();
     try {
       await _client.auth.signInWithPassword(
-        email: email.trim(),
+        email: cleanEmail,
         password: password,
       );
       final profile = await fetchCurrentProfile();
@@ -111,6 +132,36 @@ class SupabaseAuthRepository implements AuthRepository {
       throw const AuthFailure('Profil belum tersedia untuk akun ini.');
     } catch (error) {
       if (error is AuthFailure) rethrow;
+      if (error is supabase.AuthException && _isEmailNotConfirmed(error)) {
+        await _sendEmailVerification(cleanEmail);
+        throw AuthEmailVerificationPending(cleanEmail);
+      }
+      throw AuthFailure(_messageFromError(error));
+    }
+  }
+
+  @override
+  Future<void> resendEmailVerification(String email) async {
+    try {
+      await _sendEmailVerification(email.trim());
+    } catch (error) {
+      throw AuthFailure(_messageFromError(error));
+    }
+  }
+
+  @override
+  Future<void> verifyEmailOtp({
+    required String email,
+    required String token,
+  }) async {
+    try {
+      await _client.auth.verifyOTP(
+        email: email.trim(),
+        token: token.trim(),
+        type: supabase.OtpType.signup,
+        redirectTo: emailRedirectTo,
+      );
+    } catch (error) {
       throw AuthFailure(_messageFromError(error));
     }
   }
@@ -133,6 +184,7 @@ class SupabaseAuthRepository implements AuthRepository {
       final response = await _client.auth.signUp(
         email: email.trim(),
         password: password,
+        emailRedirectTo: emailRedirectTo,
         data: {'name': profile.name, 'username': profile.username},
       );
       final userId = response.user?.id ?? currentUserId;
@@ -140,9 +192,7 @@ class SupabaseAuthRepository implements AuthRepository {
         throw const AuthFailure('Akun dibuat, tetapi sesi belum aktif.');
       }
       if (currentUserId == null) {
-        throw const AuthFailure(
-          'Akun dibuat. Silakan verifikasi email lalu login.',
-        );
+        return profile;
       }
 
       await _client.from('profiles').upsert({
@@ -190,6 +240,19 @@ class SupabaseAuthRepository implements AuthRepository {
     return value.trim().replaceFirst(RegExp(r'^@+'), '');
   }
 
+  Future<void> _sendEmailVerification(String email) {
+    return _client.auth.resend(
+      email: email,
+      type: supabase.OtpType.signup,
+      emailRedirectTo: emailRedirectTo,
+    );
+  }
+
+  bool _isEmailNotConfirmed(supabase.AuthException error) {
+    return error.code == 'email_not_confirmed' ||
+        error.message.toLowerCase().contains('email not confirmed');
+  }
+
   String _messageFromError(Object error) {
     final rawMessage = switch (error) {
       supabase.AuthException(:final message) => message,
@@ -198,6 +261,10 @@ class SupabaseAuthRepository implements AuthRepository {
       _ => error.toString(),
     };
     final message = rawMessage.toLowerCase();
+    if (message.contains('could not find the function') ||
+        message.contains('schema cache')) {
+      return 'Supabase migration belum diterapkan. Jalankan SQL migration terbaru lalu coba lagi.';
+    }
     if (message.contains('duplicate') ||
         message.contains('profiles_username') ||
         message.contains('unique')) {
@@ -206,6 +273,9 @@ class SupabaseAuthRepository implements AuthRepository {
     if (message.contains('invalid login') ||
         message.contains('invalid credentials')) {
       return 'Email atau password tidak sesuai.';
+    }
+    if (message.contains('expired') && message.contains('token')) {
+      return 'Kode verifikasi sudah kedaluwarsa. Minta email baru lalu gunakan kode terbaru.';
     }
     return rawMessage;
   }

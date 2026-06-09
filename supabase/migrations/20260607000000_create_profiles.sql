@@ -36,6 +36,23 @@ to authenticated
 using ((select auth.uid()) = id)
 with check ((select auth.uid()) = id);
 
+create or replace function public.is_email_taken(check_email text)
+returns boolean
+language sql
+security definer
+set search_path = public, auth
+stable
+as $$
+  select exists (
+    select 1
+    from auth.users
+    where lower(email) = lower(btrim(check_email))
+  );
+$$;
+
+revoke all on function public.is_email_taken(text) from public;
+grant execute on function public.is_email_taken(text) to anon, authenticated;
+
 create or replace function public.is_username_taken(check_username text)
 returns boolean
 language sql
@@ -81,3 +98,5 @@ drop trigger if exists on_auth_user_created_create_profile on auth.users;
 create trigger on_auth_user_created_create_profile
 after insert on auth.users
 for each row execute function public.handle_new_user_profile();
+
+notify pgrst, 'reload schema';
